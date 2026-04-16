@@ -416,10 +416,12 @@ pub async fn test_channel(
         req_builder = req_builder.header("Authorization", format!("Bearer {}", api_key));
     }
 
+    let start = std::time::Instant::now();
     match req_builder.send().await {
         Ok(resp) => {
             let status = resp.status();
             let status_code = status.as_u16();
+            let latency_ms = start.elapsed().as_millis() as u64;
 
             // Try to read response body for more context
             let body_summary = match resp.text().await {
@@ -439,6 +441,7 @@ pub async fn test_channel(
                     "status": "ok",
                     "http_status": status_code,
                     "message": "渠道连通性测试成功",
+                    "latency_ms": latency_ms,
                     "response_body": body_summary
                 }))
             } else {
@@ -456,11 +459,15 @@ pub async fn test_channel(
                     "status": "warning",
                     "http_status": status_code,
                     "message": format!("渠道返回状态码 {}，{}", status_code, hint),
+                    "latency_ms": latency_ms,
                     "response_body": body_summary
                 }))
             }
         }
-        Err(e) => error_response(StatusCode::BAD_GATEWAY, &format!("连接上游服务失败: {}", e)),
+        Err(e) => {
+            let latency_ms = start.elapsed().as_millis() as u64;
+            error_response(StatusCode::BAD_GATEWAY, &format!("连接上游服务失败: {} (耗时 {}ms)", e, latency_ms))
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 import { request } from '../request';
 
 /** Get request log list with pagination and server-side filtering */
-export function fetchLogList(page = 1, pageSize = 20, params?: { model?: string; status_code?: string }) {
+export function fetchLogList(page = 1, pageSize = 20, params?: { model?: string; status_code?: string; start_time?: string; end_time?: string }) {
   return request<Api.Log.RequestLog[]>({
     url: '/admin/logs',
     method: 'get',

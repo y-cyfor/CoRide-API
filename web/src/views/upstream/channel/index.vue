@@ -38,43 +38,107 @@ const typeOptions = [
 interface SupplierOption {
   label: string;
   value: string;
-  children?: Array<{ label: string; value: string; url: string; type: 'openai' | 'anthropic' }>;
+  children?: Array<{
+    label: string;
+    value: string;
+    children?: Array<{ label: string; value: string; url: string; type: 'openai' | 'anthropic' }>;
+  }>;
 }
 
 const supplierOptions: SupplierOption[] = [
   {
     label: '阿里云 (通义千问)', value: 'aliyun',
     children: [
-      { label: '标准版', value: 'standard', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', type: 'openai' },
-      { label: 'CodingPlan 版', value: 'codingplan', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1/codingplan', type: 'openai' },
+      {
+        label: '标准版', value: 'standard',
+        children: [
+          { label: 'OpenAI 兼容', value: 'openai', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', type: 'openai' },
+          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1/apps/anthropic', type: 'anthropic' },
+        ]
+      },
+      {
+        label: 'CodingPlan 版', value: 'codingplan',
+        children: [
+          { label: 'OpenAI 兼容', value: 'openai', url: 'https://coding.dashscope.aliyuncs.com/v1', type: 'openai' },
+          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://coding.dashscope.aliyuncs.com/apps/anthropic', type: 'anthropic' },
+        ]
+      },
     ]
   },
   {
     label: '智谱 AI', value: 'zhipu',
     children: [
-      { label: '标准版', value: 'standard', url: 'https://open.bigmodel.cn/api/paas/v4', type: 'openai' },
-      { label: 'CodingPlan 版', value: 'codingplan', url: 'https://open.bigmodel.cn/api/paas/v4/codingplan', type: 'openai' },
+      {
+        label: '标准版', value: 'standard',
+        children: [
+          { label: 'OpenAI 兼容', value: 'openai', url: 'https://open.bigmodel.cn/api/paas/v4', type: 'openai' },
+          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://open.bigmodel.cn/api/paas/v4/anthropic', type: 'anthropic' },
+        ]
+      },
+      {
+        label: 'CodingPlan 版', value: 'codingplan',
+        children: [
+          { label: 'OpenAI 兼容', value: 'openai', url: 'https://open.bigmodel.cn/api/paas/v4', type: 'openai' },
+          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://open.bigmodel.cn/api/anthropic', type: 'anthropic' },
+        ]
+      },
     ]
   },
   {
     label: 'Kimi (月之暗面)', value: 'kimi',
     children: [
-      { label: '标准版', value: 'standard', url: 'https://api.moonshot.cn/v1', type: 'openai' },
-      { label: 'CodingPlan 版', value: 'codingplan', url: 'https://api.moonshot.cn/v1/codingplan', type: 'openai' },
+      {
+        label: '标准版', value: 'standard',
+        children: [
+          { label: 'OpenAI 兼容', value: 'openai', url: 'https://api.moonshot.cn/v1', type: 'openai' },
+          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://api.moonshot.cn/v1/anthropic', type: 'anthropic' },
+        ]
+      },
+      {
+        label: 'CodingPlan 版', value: 'codingplan',
+        children: [
+          { label: 'OpenAI 兼容', value: 'openai', url: 'https://api.kimi.com/coding/', type: 'openai' },
+          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://api.kimi.com/coding/', type: 'anthropic' },
+        ]
+      },
     ]
   },
   {
     label: '小米', value: 'xiaomi',
     children: [
-      { label: '标准版', value: 'standard', url: 'https://api.xiaoai.ai/v1', type: 'openai' },
-      { label: 'CodingPlan 版', value: 'codingplan', url: 'https://api.xiaoai.ai/v1/codingplan', type: 'openai' },
+      {
+        label: '标准版', value: 'standard',
+        children: [
+          { label: 'OpenAI 兼容', value: 'openai', url: 'https://api.miapi.xiaomi.com/v1', type: 'openai' },
+          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://api.miapi.xiaomi.com/v1/anthropic', type: 'anthropic' },
+        ]
+      },
+      {
+        label: 'CodingPlan 版', value: 'codingplan',
+        children: [
+          { label: 'OpenAI 兼容', value: 'openai', url: 'https://token-plan-cn.xiaomimimo.com/v1', type: 'openai' },
+          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://token-plan-cn.xiaomimimo.com/anthropic', type: 'anthropic' },
+        ]
+      },
     ]
   },
   {
     label: 'MiniMax', value: 'minimax',
     children: [
-      { label: '标准版', value: 'standard', url: 'https://api.minimax.chat/v1', type: 'openai' },
-      { label: 'CodingPlan 版', value: 'codingplan', url: 'https://api.minimax.chat/v1/codingplan', type: 'openai' },
+      {
+        label: '标准版', value: 'standard',
+        children: [
+          { label: 'OpenAI 兼容', value: 'openai', url: 'https://api.minimaxi.com/v1', type: 'openai' },
+          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://api.minimaxi.com/v1/anthropic', type: 'anthropic' },
+        ]
+      },
+      {
+        label: 'CodingPlan 版', value: 'codingplan',
+        children: [
+          { label: 'OpenAI 兼容', value: 'openai', url: 'https://api.minimaxi.com/v1/coding', type: 'openai' },
+          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://api.minimaxi.com/v1/coding/anthropic', type: 'anthropic' },
+        ]
+      },
     ]
   },
   {
@@ -96,6 +160,8 @@ const columns: DataTableColumns<Api.Channel.Channel> = [
   { title: '名称', key: 'name' },
   { title: '类型', key: 'type', width: 100, render: row => h(NTag, { type: row.type === 'anthropic' ? 'warning' : 'info' }, { default: () => row.type }) },
   { title: 'BaseURL', key: 'base_url', ellipsis: { tooltip: true } },
+  { title: '模型数', key: 'model_count', width: 70, render: row => (row as any).model_count || 0 },
+  { title: '应用伪装', key: 'app_profile_name', width: 100, render: row => (row as any).app_profile_name ? h(NTag, { type: 'default', size: 'small' }, { default: () => (row as any).app_profile_name }) : h('span', { style: 'color: #999' }, '无') },
   { title: '权重', key: 'weight', width: 60 },
   { title: '状态', key: 'status', width: 80, render: row => h(NTag, { type: row.status === 'active' ? 'success' : 'default' }, { default: () => row.status }) },
   {
@@ -250,13 +316,21 @@ async function handleSave() {
 }
 
 function onSupplierSelect(value: string[], option: any[]) {
-  // value is [supplier, version]
-  if (option.length === 2) {
+  // value is [supplier, version, interface_type]
+  if (option.length >= 3) {
+    const supplier = option[0];
+    const version = option[1];
+    const iface = option[option.length - 1];
+    formModel.value.name = `${supplier.label} ${version.label}`;
+    formModel.value.base_url = iface.url;
+    formModel.value.type = iface.type;
+  } else if (option.length === 2) {
+    // Fallback for 2-level options (OpenAI/Anthropic official)
     const supplier = option[0];
     const child = option[1];
     formModel.value.name = supplier.label;
-    formModel.value.base_url = child.url;
-    formModel.value.type = child.type;
+    formModel.value.base_url = child.url || '';
+    formModel.value.type = child.type || 'openai';
   }
 }
 
@@ -267,7 +341,7 @@ async function handleTest(row: Api.Channel.Channel) {
     loadingMsg.destroy();
     if (!error) {
       if (data?.status === 'ok') {
-        message.success(`测试结果: 渠道连通正常 (HTTP ${data.http_status})`);
+        message.success(`测试结果: 渠道连通正常 | 耗时 ${data.latency_ms}ms (HTTP ${data.http_status})`);
       } else if (data?.status === 'warning') {
         const httpStatus = data.http_status;
         // Special handling for 405 — /models endpoint not supported

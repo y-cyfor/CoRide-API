@@ -72,9 +72,13 @@ async function loadModelOptions() {
 
 async function loadData() {
   loading.value = true;
-  const filterParams: { model?: string; status_code?: string } = {};
+  const filterParams: { model?: string; status_code?: string; start_time?: string; end_time?: string } = {};
   if (filterModel.value) filterParams.model = filterModel.value;
   if (filterStatus.value) filterParams.status_code = filterStatus.value;
+  if (filterDateRange.value) {
+    filterParams.start_time = new Date(filterDateRange.value[0]).toISOString().split('T')[0];
+    filterParams.end_time = new Date(filterDateRange.value[1]).toISOString().split('T')[0] + 'T23:59:59';
+  }
 
   const { data, error } = await fetchLogList(pagination.value.page, pagination.value.pageSize, filterParams);
   if (!error && data) {

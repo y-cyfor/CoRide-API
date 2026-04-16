@@ -6,6 +6,7 @@ import type { DataTableColumns } from 'naive-ui';
 
 const loading = ref(false);
 const quotas = ref<Api.Quota.Quota[]>([]);
+const users = ref<Map<number, string>>(new Map());
 const dialog = useDialog();
 const message = useMessage();
 const isEdit = ref(false);
@@ -39,9 +40,17 @@ const cycleOptions = [
   { label: '永久', value: 'permanent' }
 ];
 
+async function loadUsers() {
+  const { data } = await fetchUserList(1, 100);
+  if (data) {
+    userOptions.value = data.map(u => ({ label: u.username, value: u.id }));
+    users.value = new Map(data.map((u: any) => [u.id, u.username]));
+  }
+}
+
 const columns: DataTableColumns<Api.Quota.Quota> = [
   { title: 'ID', key: 'id', width: 60 },
-  { title: '用户ID', key: 'user_id', width: 80 },
+  { title: '用户', key: 'username', width: 100, render: row => users.value.get(row.user_id) || `#${row.user_id}` },
   { title: '类型', key: 'quota_type', width: 80, render: row => h(NTag, { type: row.quota_type === 'tokens' ? 'warning' : 'info' }, { default: () => row.quota_type }) },
   { title: '总限额', key: 'total_limit', width: 100 },
   { title: '已使用', key: 'used', width: 80 },
