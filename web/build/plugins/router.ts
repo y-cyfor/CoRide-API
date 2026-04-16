@@ -67,6 +67,11 @@ export function setupElegantRouter() {
 
       if (constantRoutes.includes(key)) {
         meta.constant = true;
+        meta.hideInMenu = true;
+      }
+
+      if (key === 'iframe-page') {
+        meta.hideInMenu = true;
       }
 
       return meta;

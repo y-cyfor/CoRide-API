@@ -230,7 +230,7 @@ const local: App.I18n.Schema = {
     manage: '管理中心',
     routing: '请求分流',
     'routing_app-profile': '应用预设',
-    routing_traffic_plan: '应用方案',
+    'routing_traffic-plan': '应用方案',
     upstream: '上游模型',
     upstream_channel: '渠道管理',
     upstream_model: '模型管理',

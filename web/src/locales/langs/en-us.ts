@@ -234,7 +234,7 @@ const local: App.I18n.Schema = {
     manage: 'Management',
     routing: 'Request Routing',
     'routing_app-profile': 'App Profiles',
-    routing_traffic_plan: 'Traffic Plans',
+    'routing_traffic-plan': 'Traffic Plans',
     upstream: 'Upstream Models',
     upstream_channel: 'Channel Management',
     upstream_model: 'Model Management',
