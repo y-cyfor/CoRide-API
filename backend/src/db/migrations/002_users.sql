@@ -1,0 +1,14 @@
+-- Migration 002: Users table
+
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username VARCHAR(64) UNIQUE NOT NULL,
+    password_hash VARCHAR(128) NOT NULL,
+    role VARCHAR(16) NOT NULL DEFAULT 'user',
+    api_key VARCHAR(128) UNIQUE NOT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'active',
+    enabled_models TEXT,
+    note TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

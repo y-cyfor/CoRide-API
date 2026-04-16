@@ -1,0 +1,22 @@
+# Rust
+backend/target/
+backend/.env
+backend/data/*.db
+
+# Node
+web/node_modules/
+web/dist/
+web/.env*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude
+.claude/

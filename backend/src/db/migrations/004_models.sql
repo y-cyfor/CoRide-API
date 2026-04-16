@@ -1,0 +1,11 @@
+-- Migration 004: Models table
+
+CREATE TABLE IF NOT EXISTS models (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_id INTEGER NOT NULL,
+    source_name VARCHAR(128) NOT NULL,
+    proxy_name VARCHAR(128) NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

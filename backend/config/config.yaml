@@ -1,0 +1,33 @@
+# CoRide-API Configuration
+
+server:
+  port: 8000
+  host: "0.0.0.0"
+
+database:
+  path: "./data/coride.db"
+  pool_size: 10
+
+admin:
+  username: "admin"
+  password: "admin123"
+
+jwt:
+  secret: "change-me-to-random-string"
+  expires_in: 86400
+
+log:
+  level: "info"
+  retention_days: 30
+  max_records: 100000
+
+proxy:
+  timeout: 300000
+  max_retries: 1
+  log_request_body: false
+  log_response_body: false
+
+global_rate_limit:
+  qps: 100
+  concurrency: 50
+  action: "reject"
