@@ -20,20 +20,23 @@ declare module "@elegant-router/types" {
     "403": "/403";
     "404": "/404";
     "500": "/500";
+    "control": "/control";
+    "control_quota": "/control/quota";
+    "control_ratelimit": "/control/ratelimit";
+    "control_user": "/control/user";
+    "data": "/data";
+    "data_log": "/data/log";
+    "data_stats": "/data/stats";
     "home": "/home";
     "iframe-page": "/iframe-page/:url";
     "login": "/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?";
-    "manage": "/manage";
-    "manage_app-profile": "/manage/app-profile";
-    "manage_channel": "/manage/channel";
-    "manage_log": "/manage/log";
-    "manage_model": "/manage/model";
-    "manage_quota": "/manage/quota";
-    "manage_ratelimit": "/manage/ratelimit";
-    "manage_settings": "/manage/settings";
-    "manage_stats": "/manage/stats";
-    "manage_traffic-plan": "/manage/traffic-plan";
-    "manage_user": "/manage/user";
+    "routing": "/routing";
+    "routing_app-profile": "/routing/app-profile";
+    "routing_traffic-plan": "/routing/traffic-plan";
+    "settings": "/settings";
+    "upstream": "/upstream";
+    "upstream_channel": "/upstream/channel";
+    "upstream_model": "/upstream/model";
   };
 
   /**
@@ -68,10 +71,14 @@ declare module "@elegant-router/types" {
     | "403"
     | "404"
     | "500"
+    | "control"
+    | "data"
     | "home"
     | "iframe-page"
     | "login"
-    | "manage"
+    | "routing"
+    | "settings"
+    | "upstream"
   >;
 
   /**
@@ -93,17 +100,17 @@ declare module "@elegant-router/types" {
     | "500"
     | "iframe-page"
     | "login"
+    | "control_quota"
+    | "control_ratelimit"
+    | "control_user"
+    | "data_log"
+    | "data_stats"
     | "home"
-    | "manage_app-profile"
-    | "manage_channel"
-    | "manage_log"
-    | "manage_model"
-    | "manage_quota"
-    | "manage_ratelimit"
-    | "manage_settings"
-    | "manage_stats"
-    | "manage_traffic-plan"
-    | "manage_user"
+    | "routing_app-profile"
+    | "routing_traffic-plan"
+    | "settings"
+    | "upstream_channel"
+    | "upstream_model"
   >;
 
   /**

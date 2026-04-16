@@ -20,3 +20,9 @@ Thumbs.db
 
 # Claude
 .claude/
+CLAUDE.md
+
+# Personal
+dev.bat
+dev.sh
+vibe/

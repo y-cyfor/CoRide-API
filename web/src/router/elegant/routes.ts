@@ -9,43 +9,110 @@ export const generatedRoutes: GeneratedRoute[] = [
   {
     name: '403',
     path: '/403',
-    component: 'layout.blank$view.403',
+    component: 'layout.base$view.403',
     meta: {
       title: '403',
       i18nKey: 'route.403',
-      constant: true,
-      hideInMenu: true
+      constant: true
     }
   },
   {
     name: '404',
     path: '/404',
-    component: 'layout.blank$view.404',
+    component: 'layout.base$view.404',
     meta: {
       title: '404',
       i18nKey: 'route.404',
-      constant: true,
-      hideInMenu: true
+      constant: true
     }
   },
   {
     name: '500',
     path: '/500',
-    component: 'layout.blank$view.500',
+    component: 'layout.base$view.500',
     meta: {
       title: '500',
       i18nKey: 'route.500',
-      constant: true,
-      hideInMenu: true
+      constant: true
     }
+  },
+  {
+    name: 'control',
+    path: '/control',
+    component: 'layout.base',
+    meta: {
+      title: '流量控制',
+      i18nKey: 'route.control',
+      order: 4
+    },
+    children: [
+      {
+        name: 'control_quota',
+        path: '/control/quota',
+        component: 'view.control_quota',
+        meta: {
+          title: '配额管理',
+          i18nKey: 'route.control_quota'
+        }
+      },
+      {
+        name: 'control_ratelimit',
+        path: '/control/ratelimit',
+        component: 'view.control_ratelimit',
+        meta: {
+          title: '限流管理',
+          i18nKey: 'route.control_ratelimit'
+        }
+      },
+      {
+        name: 'control_user',
+        path: '/control/user',
+        component: 'view.control_user',
+        meta: {
+          title: '用户管理',
+          i18nKey: 'route.control_user'
+        }
+      }
+    ]
+  },
+  {
+    name: 'data',
+    path: '/data',
+    component: 'layout.base',
+    meta: {
+      title: '数据统计',
+      i18nKey: 'route.data',
+      order: 5
+    },
+    children: [
+      {
+        name: 'data_log',
+        path: '/data/log',
+        component: 'view.data_log',
+        meta: {
+          title: '请求日志',
+          i18nKey: 'route.data_log'
+        }
+      },
+      {
+        name: 'data_stats',
+        path: '/data/stats',
+        component: 'view.data_stats',
+        meta: {
+          title: '使用统计',
+          i18nKey: 'route.data_stats'
+        }
+      }
+    ]
   },
   {
     name: 'home',
     path: '/home',
     component: 'layout.base$view.home',
     meta: {
-      title: 'home',
-      i18nKey: 'route.home'
+      title: '仪表盘',
+      i18nKey: 'route.home',
+      order: 1
     }
   },
   {
@@ -55,133 +122,86 @@ export const generatedRoutes: GeneratedRoute[] = [
     props: true,
     meta: {
       title: 'iframe-page',
-      i18nKey: 'route.iframe-page',
-      constant: true,
-      hideInMenu: true,
-      keepAlive: true
+      i18nKey: 'route.iframe-page'
     }
   },
   {
     name: 'login',
     path: '/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?',
-    component: 'layout.blank$view.login',
+    component: 'layout.base$view.login',
     props: true,
     meta: {
       title: 'login',
       i18nKey: 'route.login',
-      constant: true,
-      hideInMenu: true
+      constant: true
     }
   },
   {
-    name: 'manage',
-    path: '/manage',
+    name: 'routing',
+    path: '/routing',
     component: 'layout.base',
     meta: {
-      title: '管理中心',
-      icon: 'mdi:cog',
-      order: 2,
-      i18nKey: 'route.manage'
+      title: '请求分流',
+      i18nKey: 'route.routing',
+      order: 2
     },
     children: [
       {
-        name: 'manage_app-profile',
-        path: '/manage/app-profile',
-        component: 'view.manage_app-profile',
+        name: 'routing_app-profile',
+        path: '/routing/app-profile',
+        component: 'view.routing_app-profile',
         meta: {
           title: '应用预设',
-          icon: 'mdi:application-settings',
-          i18nKey: 'route.manage_app-profile'
+          i18nKey: 'route.routing_app-profile'
         }
       },
       {
-        name: 'manage_channel',
-        path: '/manage/channel',
-        component: 'view.manage_channel',
-        meta: {
-          title: '渠道管理',
-          icon: 'mdi:api',
-          i18nKey: 'route.manage_channel'
-        }
-      },
-      {
-        name: 'manage_log',
-        path: '/manage/log',
-        component: 'view.manage_log',
-        meta: {
-          title: '请求日志',
-          icon: 'mdi:file-document-outline',
-          i18nKey: 'route.manage_log'
-        }
-      },
-      {
-        name: 'manage_model',
-        path: '/manage/model',
-        component: 'view.manage_model',
-        meta: {
-          title: '模型管理',
-          icon: 'mdi:cube-outline',
-          i18nKey: 'route.manage_model'
-        }
-      },
-      {
-        name: 'manage_quota',
-        path: '/manage/quota',
-        component: 'view.manage_quota',
-        meta: {
-          title: '配额管理',
-          icon: 'mdi:chart-pie',
-          i18nKey: 'route.manage_quota'
-        }
-      },
-      {
-        name: 'manage_ratelimit',
-        path: '/manage/ratelimit',
-        component: 'view.manage_ratelimit',
-        meta: {
-          title: '限流管理',
-          icon: 'mdi:speedometer',
-          i18nKey: 'route.manage_ratelimit'
-        }
-      },
-      {
-        name: 'manage_settings',
-        path: '/manage/settings',
-        component: 'view.manage_settings',
-        meta: {
-          title: '系统设置',
-          icon: 'mdi:cog-outline',
-          i18nKey: 'route.manage_settings'
-        }
-      },
-      {
-        name: 'manage_stats',
-        path: '/manage/stats',
-        component: 'view.manage_stats',
-        meta: {
-          title: '使用统计',
-          icon: 'mdi:chart-bar',
-          i18nKey: 'route.manage_stats'
-        }
-      },
-      {
-        name: 'manage_traffic-plan',
-        path: '/manage/traffic-plan',
-        component: 'view.manage_traffic-plan',
+        name: 'routing_traffic-plan',
+        path: '/routing/traffic-plan',
+        component: 'view.routing_traffic-plan',
         meta: {
           title: '应用方案',
-          icon: 'mdi:traffic-light',
-          i18nKey: 'route.manage_traffic-plan'
+          i18nKey: 'route.routing_traffic-plan'
+        }
+      }
+    ]
+  },
+  {
+    name: 'settings',
+    path: '/settings',
+    component: 'layout.base$view.settings',
+    meta: {
+      title: '系统设置',
+      i18nKey: 'route.settings',
+      order: 6
+    }
+  },
+  {
+    name: 'upstream',
+    path: '/upstream',
+    component: 'layout.base',
+    meta: {
+      title: '上游模型',
+      i18nKey: 'route.upstream',
+      order: 3
+    },
+    children: [
+      {
+        name: 'upstream_channel',
+        path: '/upstream/channel',
+        component: 'view.upstream_channel',
+        meta: {
+          title: '渠道管理',
+          i18nKey: 'route.upstream_channel'
         }
       },
       {
-        name: 'manage_user',
-        path: '/manage/user',
-        component: 'view.manage_user',
+        name: 'upstream_model',
+        path: '/upstream/model',
+        component: 'view.upstream_model',
         meta: {
-          title: '用户管理',
-          icon: 'mdi:account-multiple',
-          i18nKey: 'route.manage_user'
+          title: '模型管理',
+          i18nKey: 'route.upstream_model'
         }
       }
     ]
