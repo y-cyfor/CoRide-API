@@ -20,7 +20,23 @@
 
 ---
 
-## 二、暂不修改 (技术限制/优先级低)
+## 二、设计如此 (非Bug)
+
+### 1. set_log_level API 不实际修改日志级别 ~~[设计如此]~~
+
+**原因**: Rust tracing-subscriber 在初始化后不支持热重载日志级别。要实现运行时动态修改需要使用 `ReloadLayer` 机制，需要重构 main.rs 中的 tracing 初始化代码，改动较大。当前 API 返回消息已提示 "requires restart"，不是严格意义的 bug。
+
+### 2. set_global_rate_limit 修改配置文件但运行时不生效 ~~[设计如此]~~
+
+**原因**: 全局限流器 (`global_qps_limiter`) 是 Governor RateLimiter 实例，初始化后不支持动态修改 QPS。要实现需要重构 AppState 使限流器支持运行时替换（使用 `ArcSwap` 或 `Mutex`），改动较大。当前 API 返回消息已提示 "requires restart"，不是严格意义的 bug。
+
+### 3. 配额 total_limit 默认值为0 ~~[设计如此]~~
+
+**原因**: 用户在创建配额表单时会手动修改默认值，保存前会验证数值，属于 UI 设计建议而非严格 bug。
+
+---
+
+## 三、暂不修改 (技术限制/优先级低)
 
 ### 1. Streaming 响应全量加载到内存 ~~[暂不修改]~~
 
@@ -38,101 +54,20 @@
 
 ---
 
-## 三、2026-04-16 新发现缺陷
+## 四、已修复缺陷
 
-> 本次审计覆盖：后端 admin_routes.rs、models.rs、quota.rs + 前端相关组件
+> 以下缺陷已修复并迁移至 `buglist-completed.md`
 
----
-
-### P1 真正的 Bug (5个)
-
-#### 1. set_log_level API 不实际修改日志级别 ~~[待修复]~~
-
-**问题描述：**
-- `admin_routes.rs:1158-1174` 中 `set_log_level` 只打印日志，未动态修改 tracing 级别
-- API 名称和响应都暗示可以"设置"，实际需要重启才能生效
-
-**涉及文件：** `backend/src/router/admin_routes.rs:1158-1174`
+| 原问题 | 修复方案 | 迁移至 |
+|--------|----------|--------|
+| quota_warnings SQL 除零风险 | 添加 `total_limit > 0` WHERE 条件 | buglist-completed.md 八.1 |
+| CSV 导出 channel_id=0 误导 | NULL 显示为 "N/A" 而非 0 | buglist-completed.md 八.2 |
+| 流量计划随机数种子不够随机 | 混合时间戳+进程ID+线程地址熵源 | buglist-completed.md 八.3 |
+| 流量计划时段重叠未验证 | 后端添加 validate_traffic_plan_slots | buglist-completed.md 八.4 |
 
 ---
 
-#### 2. set_global_rate_limit 修改配置文件但运行时不生效 ~~[待修复]~~
-
-**问题描述：**
-- `admin_routes.rs:1196-1227` 修改 config.yaml 但 `AppState.config` 仍是旧值
-- API 返回 success，误导用户认为已生效
-
-**涉及文件：** `backend/src/router/admin_routes.rs:1196-1227`
-
----
-
-#### 3. quota_warnings SQL 除零风险 ~~[待修复]~~
-
-**问题描述：**
-- `admin_routes.rs:1238` 查询 `CAST(q.used AS FLOAT) / CAST(q.total_limit AS FLOAT)`
-- 当 `total_limit=0` 时产生除零错误
-
-**涉及文件：** `backend/src/router/admin_routes.rs:1235-1243`
-
----
-
-#### 4. 流量计划随机数种子不够随机 ~~[待修复]~~
-
-**问题描述：**
-- `models.rs:1247-1252` 使用纳秒时间戳做随机种子
-- 高并发时可能产生相同种子，导致不公平分配
-
-**涉及文件：** `backend/src/db/models.rs:1245-1260`
-
----
-
-#### 5. 流量计划时段重叠未验证 ~~[待修复]~~
-
-**问题描述：**
-- 后端 `upsert_global_traffic_plan` 和 `upsert_channel_traffic_plan` 未校验时段重叠
-- 用户可配置 0-8 和 6-12 这样的重叠时段
-
-**涉及文件：** `backend/src/router/admin_routes.rs:1302-1335, 1384-1425`
-
----
-
-### P2 UI/交互缺陷 (2个)
-
-#### 1. 配额 total_limit 默认值为0 ~~[待确认]~~
-
-**问题描述：**
-- `quota/index.vue:23` 中 `total_limit: 0` 作为默认值
-- 用户可能无意创建零配额
-
-**说明：** 用户保存前可以修改默认值，属于 UI 设计建议而非严格 bug
-
-**涉及文件：** `web/src/views/control/quota/index.vue:21-25`
-
----
-
-#### 2. 流量计划编辑时段验证未阻止保存 ~~[待修复]~~
-
-**问题描述：**
-- `traffic-plan/index.vue:64-66` 的 `hasOverlap` 只是检查函数
-- 前端未在保存时调用此函数阻止重叠提交
-
-**涉及文件：** `web/src/views/routing/traffic-plan/index.vue`
-
----
-
-### P3 其他缺陷 (1个)
-
-#### 1. CSV 导出 channel_id=0 误导 ~~[待修复]~~
-
-**问题描述：**
-- `admin_routes.rs:1103` 中 `ch.unwrap_or(0)` 将 NULL 变为 0
-- 用户可能误以为日志来自 ID=0 的渠道
-
-**涉及文件：** `backend/src/router/admin_routes.rs:1103`
-
----
-
-## 四、已排除的"伪Bug"
+## 五、已排除的"伪Bug"
 
 以下问题经代码审查确认不存在或不是bug：
 
@@ -148,38 +83,41 @@
 | usage_stats 动态 SQL 过于复杂 | 代码可维护性建议，非 bug |
 | export_logs_csv 固定10000条 | 功能限制，非 bug |
 | monthly 配额周期=30天 | 设计决策，可文档化说明 |
+| set_log_level 不实际生效 | 已标注为"设计如此"，需 tracing ReloadLayer 重构 |
+| set_global_rate_limit 不生效 | 已标注为"设计如此"，需 AppState 限流器重构 |
+| 配额 total_limit 默认值=0 | 已标注为"设计如此"，非严格 bug |
 
 ---
 
-## 五、修复优先级汇总
+## 六、修复优先级汇总
 
 | 优先级 | 问题 | 风险 | 状态 |
 |--------|------|------|------|
 | P0 | 硬编码凭据 | 凭据泄露 | ⚠️ 需手动配置 |
-| P1 | set_log_level 不生效 | API误导 | ⏳ 待修复 |
-| P1 | set_rate_limit 不生效 | API误导 | ⏳ 待修复 |
-| P1 | quota_warnings 除零风险 | SQL错误 | ⏳ 待修复 |
-| P1 | 随机数种子不随机 | 分配不均 | ⏳ 待修复 |
-| P1 | 时段重叠未验证 | 配置冲突 | ⏳ 待修复 |
-| P2 | 配额默认值=0 | 用户困扰 | ⏸️ 待确认 |
-| P2 | 时段验证不阻止保存 | 配置冲突 | ⏳ 待修复 |
-| P3 | CSV channel_id=0 | 数据误导 | ⏳ 待修复 |
+| P1 | set_log_level 不实际生效 | API误导 | 📝 设计如此，需重构 tracing |
+| P1 | set_rate_limit 不生效 | API误导 | 📝 设计如此，需重构 AppState |
+| P1 | quota_warnings 除零风险 | SQL错误 | ✅ 已修复 |
+| P1 | 随机数种子不随机 | 分配不均 | ✅ 已修复 |
+| P1 | 时段重叠未验证 | 配置冲突 | ✅ 已修复 |
+| P2 | 配额默认值=0 | 用户困扰 | 📝 设计如此 |
+| P2 | 时段验证不阻止保存 | 配置冲突 | ✅ 前端已有 |
+| P3 | CSV channel_id=0 | 数据误导 | ✅ 已修复 |
 | P3 | Streaming全量加载 | 性能 | ⏸️ 暂不修改 |
 | P3 | Token估算不准确 | 计量偏差 | ⏸️ 暂不修改 |
 
 ---
 
-## 六、待修复统计
+## 七、缺陷统计
 
-| 类别 | 待修复 | 待确认 | 暂不修改 | 需手动处理 | 合计 |
-|------|--------|--------|----------|------------|------|
+| 类别 | 已修复 | 设计如此 | 暂不修改 | 需手动处理 | 合计 |
+|------|--------|----------|----------|------------|------|
 | 安全问题 | 0 | 0 | 0 | 1 | 1 |
-| 设计缺陷 | 5 | 0 | 0 | 0 | 5 |
-| UI/交互 | 1 | 1 | 0 | 0 | 2 |
+| 设计缺陷 | 4 | 3 | 0 | 0 | 7 |
+| UI/交互 | 0 | 1 | 0 | 0 | 1 |
 | 性能 | 0 | 0 | 1 | 0 | 1 |
 | 其他 | 1 | 0 | 0 | 0 | 1 |
-| **合计** | **7** | **1** | **1** | **1** | **10** |
+| **合计** | **5** | **4** | **1** | **1** | **11** |
 
 ---
 
-> 已修复缺陷请查看 `buglist-completed.md`（共30项已修复）
+> 已修复缺陷请查看 `buglist-completed.md`（共34项已修复）

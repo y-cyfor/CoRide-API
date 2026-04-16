@@ -211,4 +211,63 @@ async function loadChannels() {
 | 逻辑Bug | 4 |
 | 缺失功能 | 3 |
 | 新增缺陷 | 4 |
-| **合计** | **30** |
+| **合计** | **34** |
+
+---
+
+## 八、2026-04-16 新增修复
+
+### 1. quota_warnings SQL 除零风险 ✅
+
+**问题描述：**
+- `admin_routes.rs:1238` 查询 `CAST(q.used AS FLOAT) / CAST(q.total_limit AS FLOAT)`
+- 当 `total_limit=0` 时产生除零错误
+
+**修复方案：**
+- 在 WHERE 子句中添加 `q.total_limit > 0` 条件，过滤零限额配额
+
+**涉及文件：** `backend/src/router/admin_routes.rs:1240`
+
+---
+
+### 2. CSV 导出 channel_id=0 误导 ✅
+
+**问题描述：**
+- `admin_routes.rs:1103` 中 `ch.unwrap_or(0)` 将 NULL 变为 0
+- 用户可能误以为日志来自 ID=0 的渠道
+
+**修复方案：**
+- 将 `ch.unwrap_or(0)` 改为 `ch.map(|v| v.to_string()).unwrap_or_else(|| "N/A".to_string())`
+- NULL 值在 CSV 中显示为 "N/A"
+
+**涉及文件：** `backend/src/router/admin_routes.rs:1103`
+
+---
+
+### 3. 流量计划随机数种子不够随机 ✅
+
+**问题描述：**
+- `models.rs:1247-1252` 使用纳秒时间戳做随机种子
+- 高并发时可能产生相同种子，导致不公平分配
+
+**修复方案：**
+- 混合多种熵源：时间戳（秒+纳秒）、进程 ID、线程地址
+- 使用黄金比例常数进行位运算混合
+
+**涉及文件：** `backend/src/db/models.rs:1245-1260`
+
+---
+
+### 4. 流量计划时段重叠未验证 ✅
+
+**问题描述：**
+- 后端 `upsert_global_traffic_plan` 和 `upsert_channel_traffic_plan` 未校验时段重叠
+- 用户可配置 0-8 和 6-12 这样的重叠时段
+
+**修复方案：**
+- **后端**：添加 `validate_traffic_plan_slots` 函数，验证时段范围、权重、重叠
+- **前端**：已有重叠检查和保存阻止逻辑（line 209-219, 323-332）
+
+**涉及文件：** `backend/src/router/admin_routes.rs:1280-1310`
+
+---

@@ -1100,7 +1100,7 @@ pub async fn export_logs_csv(
     for (id, key, ch, model, endpoint, status, pt, ct, tt, ms, created) in logs {
         csv.push_str(&format!(
             "{},{},{},\"{}\",\"{}\",{},{},{},{},{},{}\n",
-            id, key, ch.unwrap_or(0), model.replace('"', "\"\""),
+            id, key, ch.map(|v| v.to_string()).unwrap_or_else(|| "N/A".to_string()), model.replace('"', "\"\""),
             endpoint.replace('"', "\"\""), status, pt, ct, tt, ms, created
         ));
     }
@@ -1232,13 +1232,14 @@ pub async fn quota_warnings(
 ) -> Response {
     let pool = &state.db;
 
-    // Get all active quotas with usage > 80%
+    // Get all active quotas with usage > 80% (exclude zero-limit quotas to avoid division by zero)
     let warnings: Vec<(i64, String, String, i64, i64, f64)> = sqlx::query_as(
         "SELECT u.id, u.username, q.quota_type, q.total_limit, q.used,
                 ROUND(CAST(q.used AS FLOAT) / CAST(q.total_limit AS FLOAT) * 100, 1) as pct
          FROM quotas q
          JOIN users u ON u.id = q.user_id
          WHERE q.enabled = 1
+         AND q.total_limit > 0
          AND CAST(q.used AS FLOAT) / CAST(q.total_limit AS FLOAT) >= 0.8
          ORDER BY pct DESC"
     )
@@ -1281,6 +1282,31 @@ pub struct UpsertTrafficPlanRequest {
     pub slots: Vec<TrafficPlanSlotRequest>,
 }
 
+/// Validate traffic plan slots: no overlapping ranges and hours within valid range.
+fn validate_traffic_plan_slots(slots: &[TrafficPlanSlotRequest]) -> Result<(), String> {
+    for (i, slot) in slots.iter().enumerate() {
+        if slot.start_hour < 0 || slot.start_hour > 23 {
+            return Err(format!("时段 {} 起始小时必须在 0-23 之间", i + 1));
+        }
+        if slot.end_hour < 1 || slot.end_hour > 24 {
+            return Err(format!("时段 {} 结束小时必须在 1-24 之间", i + 1));
+        }
+        if slot.start_hour >= slot.end_hour {
+            return Err(format!("时段 {} 起始时间必须小于结束时间", i + 1));
+        }
+        if slot.weight <= 0 {
+            return Err(format!("时段 {} 权重必须大于 0", i + 1));
+        }
+        // Check overlap with other slots
+        for (j, other) in slots.iter().enumerate() {
+            if i != j && slot.start_hour < other.end_hour && other.start_hour < slot.end_hour {
+                return Err(format!("时段 {} 与时段 {} 存在时间重叠", i + 1, j + 1));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// GET /admin/traffic-plan/global
 pub async fn get_global_traffic_plan(
     State(state): State<Arc<AppState>>,
@@ -1304,6 +1330,11 @@ pub async fn upsert_global_traffic_plan(
     Json(req): Json<UpsertTrafficPlanRequest>,
 ) -> Response {
     let pool = &state.db;
+
+    // Validate time slots: no overlapping ranges and hours within valid range
+    if let Err(msg) = validate_traffic_plan_slots(&req.slots) {
+        return error_response(StatusCode::BAD_REQUEST, &msg);
+    }
 
     let plan_id = match models::get_global_traffic_plan(pool).await {
         Ok(Some(p)) => p.id,
@@ -1387,6 +1418,11 @@ pub async fn upsert_channel_traffic_plan(
     Json(req): Json<UpsertTrafficPlanRequest>,
 ) -> Response {
     let pool = &state.db;
+
+    // Validate time slots: no overlapping ranges and hours within valid range
+    if let Err(msg) = validate_traffic_plan_slots(&req.slots) {
+        return error_response(StatusCode::BAD_REQUEST, &msg);
+    }
 
     // Verify channel exists
     match models::get_channel_by_id(pool, channel_id).await {

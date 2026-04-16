@@ -1242,12 +1242,20 @@ pub async fn resolve_app_profile_for_channel(
         return Ok(None);
     }
 
-    // Weighted random selection
+    // Weighted random selection using mixed entropy seed
     let total_weight: i32 = slots.iter().map(|s| s.weight).sum();
-    let seed: u64 = std::time::SystemTime::now()
+    let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .subsec_nanos() as u64;
+        .unwrap_or_default();
+    // Mix multiple entropy sources: timestamp (seconds + nanos), process ID, thread address
+    let thread_addr = format!("{:p}", &std::thread::current())
+        .chars()
+        .take(16)
+        .fold(0u64, |acc, c| acc.wrapping_mul(31).wrapping_add(c as u64));
+    let seed: u64 = (now.as_secs().wrapping_mul(0x517cc1b727220a95))
+        ^ (now.subsec_nanos() as u64).wrapping_mul(0x9e3779b97f4a7c15)
+        ^ (std::process::id() as u64).wrapping_mul(0xc4ceb9fe1a85ec53)
+        ^ thread_addr;
     let pick = (seed % total_weight as u64) as i32;
     let mut remaining = pick;
     for slot in &slots {
