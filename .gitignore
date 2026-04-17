@@ -8,6 +8,10 @@ web/node_modules/
 web/dist/
 web/.env*
 
+# Root env
+.env
+!.env.example
+
 # IDE
 .vscode/
 .idea/

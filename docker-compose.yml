@@ -1,13 +1,13 @@
 services:
-  backend:
-    image: ycyfor/coride-api-backend:latest
+  coride-api:
+    image: cyfor/coride-api:latest
     build:
       context: .
-      dockerfile: Dockerfile.backend
-    container_name: coride-backend
+      dockerfile: Dockerfile
+    container_name: coride-api
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "80:80"
     volumes:
       - coride-data:/app/data
       - coride-logs:/app/log
@@ -17,18 +17,6 @@ services:
     environment:
       - CORIDE_DB_PATH=/app/data/coride.db
       - CORIDE_LOG_LEVEL=info
-
-  frontend:
-    image: ycyfor/coride-api-frontend:latest
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    container_name: coride-frontend
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
 
 volumes:
   coride-data:
