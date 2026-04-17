@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, h, onMounted } from 'vue';
 import { NButton, NTag, NSpace, NModal, NForm, NFormItem, NInput, NSelect, NInputNumber, NProgress, NCascader, NSwitch, useDialog, useMessage } from 'naive-ui';
-import { fetchChannelList, fetchCreateChannel, fetchDeleteChannel, fetchUpdateChannel, fetchTestChannel } from '@/service/api';
+import { fetchChannelList, fetchCreateChannel, fetchDeleteChannel, fetchUpdateChannel, fetchTestChannel, fetchCreateModel } from '@/service/api';
 import type { DataTableColumns } from 'naive-ui';
 
 const loading = ref(false);
@@ -154,6 +154,43 @@ const supplierOptions: SupplierOption[] = [
     ]
   },
 ];
+
+// Model presets for each supplier - common models to import
+const MODEL_PRESETS: Record<string, Array<{ source_name: string; proxy_name: string }>> = {
+  'aliyun': [
+    { source_name: 'qwen-turbo', proxy_name: 'qwen-turbo' },
+    { source_name: 'qwen-plus', proxy_name: 'qwen-plus' },
+    { source_name: 'qwen-max', proxy_name: 'qwen-max' },
+    { source_name: 'qwen-long', proxy_name: 'qwen-long' },
+  ],
+  'zhipu': [
+    { source_name: 'glm-4-plus', proxy_name: 'glm-4-plus' },
+    { source_name: 'glm-4-flash', proxy_name: 'glm-4-flash' },
+    { source_name: 'glm-4', proxy_name: 'glm-4' },
+  ],
+  'kimi': [
+    { source_name: 'moonshot-v1-8k', proxy_name: 'moonshot-v1-8k' },
+    { source_name: 'moonshot-v1-32k', proxy_name: 'moonshot-v1-32k' },
+    { source_name: 'moonshot-v1-128k', proxy_name: 'moonshot-v1-128k' },
+  ],
+  'xiaomi': [
+    { source_name: 'MiMo', proxy_name: 'MiMo' },
+  ],
+  'minimax': [
+    { source_name: 'MiniMax-M2.1', proxy_name: 'MiniMax-M2.1' },
+    { source_name: 'MiniMax-Text-01', proxy_name: 'MiniMax-Text-01' },
+  ],
+  'openai': [
+    { source_name: 'gpt-4o', proxy_name: 'gpt-4o' },
+    { source_name: 'gpt-4o-mini', proxy_name: 'gpt-4o-mini' },
+    { source_name: 'gpt-4', proxy_name: 'gpt-4' },
+  ],
+  'anthropic': [
+    { source_name: 'claude-sonnet-4-20250514', proxy_name: 'claude-sonnet-4' },
+    { source_name: 'claude-opus-4-20250416', proxy_name: 'claude-opus-4' },
+    { source_name: 'claude-haiku-4-20250324', proxy_name: 'claude-haiku-4' },
+  ],
+};
 
 const columns: DataTableColumns<Api.Channel.Channel> = [
   { title: 'ID', key: 'id', width: 60 },
@@ -312,6 +349,20 @@ async function handleSave() {
     message.success(isEdit.value ? '渠道已更新' : '渠道创建成功');
     showModal.value = false;
     await loadData();
+
+    // After creating a new channel, offer to import common models
+    if (!isEdit.value && !editingId.value) {
+      // Find the newly created channel
+      const newChannel = channels.value[0];
+      if (newChannel) {
+        const supplier = Object.keys(MODEL_PRESETS).find(key =>
+          newChannel.name.includes(MODEL_PRESETS[key][0]?.proxy_name || '')
+        ) || findSupplierFromUrl(newChannel.base_url);
+        if (supplier && MODEL_PRESETS[supplier]) {
+          offerImportModels(newChannel.id, supplier);
+        }
+      }
+    }
   }
 }
 
@@ -332,6 +383,49 @@ function onSupplierSelect(value: string[], option: any[]) {
     formModel.value.base_url = child.url || '';
     formModel.value.type = child.type || 'openai';
   }
+}
+
+// Find supplier key from base_url
+function findSupplierFromUrl(url: string): string | null {
+  if (url.includes('dashscope')) return 'aliyun';
+  if (url.includes('bigmodel')) return 'zhipu';
+  if (url.includes('moonshot') || url.includes('kimi')) return 'kimi';
+  if (url.includes('xiaoai') || url.includes('miapi') || url.includes('mimo')) return 'xiaomi';
+  if (url.includes('minimax')) return 'minimax';
+  if (url.includes('openai.com')) return 'openai';
+  if (url.includes('anthropic.com')) return 'anthropic';
+  return null;
+}
+
+// Offer to import common models after channel creation
+function offerImportModels(channelId: number, supplier: string) {
+  const presets = MODEL_PRESETS[supplier] || [];
+  if (presets.length === 0) return;
+
+  const modelNames = presets.map(p => p.proxy_name).join(', ');
+  dialog.warning({
+    title: '导入常见模型',
+    content: `检测到您添加了${supplier === 'aliyun' ? '阿里云' : supplier === 'zhipu' ? '智谱' : supplier === 'kimi' ? 'Kimi' : supplier === 'xiaomi' ? '小米' : supplier === 'minimax' ? 'MiniMax' : supplier === 'openai' ? 'OpenAI' : 'Anthropic'}渠道，是否一键导入以下常见模型？\n\n${modelNames}`,
+    positiveText: '导入',
+    negativeText: '跳过',
+    onPositiveClick: async () => {
+      let successCount = 0;
+      for (const m of presets) {
+        const { error } = await fetchCreateModel({
+          channel_id: channelId,
+          source_name: m.source_name,
+          proxy_name: m.proxy_name,
+          enabled: true,
+          is_default: false
+        });
+        if (!error) successCount++;
+      }
+      if (successCount > 0) {
+        message.success(`已导入 ${successCount}/${presets.length} 个模型`);
+        await loadData();
+      }
+    }
+  });
 }
 
 async function handleTest(row: Api.Channel.Channel) {

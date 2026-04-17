@@ -29,3 +29,11 @@
 | 22 | JWT 认证 | 真实 JWT 签发/验证 + admin_auth 中间件保护管理接口 |
 | 23 | 日志定时清理 | 每小时后台任务，按 retention_days 清理过期日志 |
 | 24 | 渠道连通性测试 | 发送真实 `/models` 请求，返回状态码 + 友好提示 |
+| 25 | 日志日期范围筛选 | 前端 `filterDateRange` 转换为 `start_time`/`end_time` 传给后端 |
+| 26 | 渠道列表模型数和应用伪装列 | 前端增加 `model_count` 和 `app_profile_name` 列 |
+| 27 | 供应商预设 Anthropic 兼容 URL | 三级级联选择器：供应商 → 版本 → OpenAI/Anthropic 接口类型 |
+| 28 | 配额列表显示用户名 | 前端通过 users Map 关联 user_id → username |
+| 29 | 渠道测试返回耗时 | 后端返回 `latency_ms` 字段，前端显示 "耗时 XXms" |
+| 30 | 统计页面完整展示 | 7个统计卡片（总请求/今日/活跃/成功/失败/P95/Token）+ 用户排名柱状图 + 模型分布饼图 |
+| 31 | 创建渠道时一键导入常见模型 | 渠道创建后弹窗提示导入对应供应商的常见模型预设 |
+| 32 | 限流编辑功能 | 代码中已存在（handleEdit + 编辑按钮） |

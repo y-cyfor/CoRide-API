@@ -675,8 +675,16 @@ pub async fn dashboard_stats(
     .ok()
     .flatten();
 
-    // Error rate (4xx and 5xx)
-    let error_count: Option<i64> = sqlx::query_scalar(
+    // Success count (2xx and 3xx)
+    let success_count: Option<i64> = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM request_logs WHERE status_code < 400",
+    )
+    .fetch_one(pool)
+    .await
+    .ok();
+
+    // Failure count (4xx and 5xx)
+    let failure_count: Option<i64> = sqlx::query_scalar(
         "SELECT COUNT(*) FROM request_logs WHERE status_code >= 400",
     )
     .fetch_one(pool)
@@ -684,7 +692,7 @@ pub async fn dashboard_stats(
     .ok();
 
     let total = total_requests.unwrap_or(0);
-    let errors = error_count.unwrap_or(0);
+    let errors = failure_count.unwrap_or(0);
     let error_rate = if total > 0 {
         format!("{:.1}%", (errors as f64 / total as f64) * 100.0)
     } else {
@@ -695,6 +703,8 @@ pub async fn dashboard_stats(
         "total_requests": total,
         "today_requests": today_requests.unwrap_or(0),
         "active_users": active_users.unwrap_or(0),
+        "success_count": success_count.unwrap_or(0),
+        "failure_count": failure_count.unwrap_or(0),
         "p95_latency_ms": p95_ms.unwrap_or(0),
         "error_rate": error_rate,
     }))
@@ -1078,12 +1088,25 @@ pub async fn usage_stats(
         .unwrap_or_default()
     };
 
+    // Model usage distribution (TOP 10)
+    let model_usage: Vec<(String, i64)> = {
+        let sql = "SELECT model, COUNT(*) as count FROM request_logs
+             WHERE created_at >= datetime('now', ? || ' days')
+             GROUP BY model ORDER BY count DESC LIMIT 10";
+        sqlx::query_as(sql)
+            .bind(format!("-{}", days))
+            .fetch_all(pool)
+            .await
+            .unwrap_or_default()
+    };
+
     ok_response(serde_json::json!({
         "daily_trend": daily_trend.iter().map(|(day, count)| serde_json::json!({"day": day, "count": count})).collect::<Vec<_>>(),
         "channel_usage": channel_usage.iter().map(|(name, count)| serde_json::json!({"name": name, "count": count})).collect::<Vec<_>>(),
         "top_users": masked_top_users,
         "total_tokens": total_tokens.unwrap_or(0),
         "token_daily": token_daily.iter().map(|(day, pt, ct)| serde_json::json!({"day": day, "prompt_tokens": pt, "completion_tokens": ct})).collect::<Vec<_>>(),
+        "model_usage": model_usage.iter().map(|(name, count)| serde_json::json!({"name": name, "count": count})).collect::<Vec<_>>(),
     }))
 }
 

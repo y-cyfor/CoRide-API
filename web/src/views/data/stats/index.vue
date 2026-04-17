@@ -10,14 +10,22 @@ const stats = ref({
   total_requests: 0,
   today_requests: 0,
   active_users: 0,
-  total_tokens: 0
+  success_count: 0,
+  failure_count: 0,
+  total_tokens: 0,
+  p95_latency_ms: 0,
+  error_rate: '0.0%'
 });
 const trendChartRef = ref<HTMLDivElement>();
 const channelChartRef = ref<HTMLDivElement>();
 const tokenChartRef = ref<HTMLDivElement>();
+const userRankChartRef = ref<HTMLDivElement>();
+const modelChartRef = ref<HTMLDivElement>();
 let trendChart: echarts.ECharts | null = null;
 let channelChart: echarts.ECharts | null = null;
 let tokenChart: echarts.ECharts | null = null;
+let userRankChart: echarts.ECharts | null = null;
+let modelChart: echarts.ECharts | null = null;
 
 // Filter state
 const filterChannel = ref<number | undefined>(undefined);
@@ -59,17 +67,23 @@ async function loadData() {
 
   if (dashRes.data) {
     stats.value = {
-      total_requests: dashRes.data.total_requests,
-      today_requests: dashRes.data.today_requests,
-      active_users: dashRes.data.active_users,
-      total_tokens: usageRes.data?.total_tokens || 0
+      total_requests: dashRes.data.total_requests || 0,
+      today_requests: dashRes.data.today_requests || 0,
+      active_users: dashRes.data.active_users || 0,
+      success_count: dashRes.data.success_count || 0,
+      failure_count: dashRes.data.failure_count || 0,
+      total_tokens: usageRes.data?.total_tokens || 0,
+      p95_latency_ms: dashRes.data.p95_latency_ms || 0,
+      error_rate: dashRes.data.error_rate || '0.0%'
     };
   }
 
   if (usageRes.data) {
-    renderTrendChart(usageRes.data.daily_trend);
-    renderChannelChart(usageRes.data.channel_usage);
+    renderTrendChart(usageRes.data.daily_trend || []);
+    renderChannelChart(usageRes.data.channel_usage || []);
     renderTokenChart(usageRes.data.token_daily || []);
+    renderUserRankChart(usageRes.data.top_users || []);
+    renderModelChart(usageRes.data.model_usage || []);
   }
 
   loading.value = false;
@@ -88,95 +102,95 @@ function handleReset() {
 
 function renderTrendChart(data: Array<{ day: string; count: number }>) {
   if (!trendChartRef.value) return;
-  if (!trendChart) {
-    trendChart = echarts.init(trendChartRef.value);
-  }
-
-  const option: EChartsOption = {
-    title: { text: '近7天请求趋势', left: 'center' },
+  if (!trendChart) trendChart = echarts.init(trendChartRef.value);
+  trendChart.setOption({
+    title: { text: '请求趋势', left: 'center', textStyle: { fontSize: 14 } },
     tooltip: { trigger: 'axis' },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: {
-      type: 'category',
-      data: data.map(d => d.day),
-      boundaryGap: false
-    },
+    xAxis: { type: 'category', data: data.map(d => d.day), boundaryGap: false },
     yAxis: { type: 'value' },
     series: [{
-      name: '请求数',
-      type: 'line',
-      smooth: true,
-      areaStyle: { opacity: 0.3 },
-      data: data.map(d => d.count),
-      itemStyle: { color: '#18a058' }
+      name: '请求数', type: 'line', smooth: true, areaStyle: { opacity: 0.3 },
+      data: data.map(d => d.count), itemStyle: { color: '#18a058' }
     }]
-  };
-
-  trendChart.setOption(option);
+  });
 }
 
 function renderChannelChart(data: Array<{ name: string; count: number }>) {
   if (!channelChartRef.value) return;
-  if (!channelChart) {
-    channelChart = echarts.init(channelChartRef.value);
-  }
-
-  const option: EChartsOption = {
-    title: { text: '渠道使用分布', left: 'center' },
+  if (!channelChart) channelChart = echarts.init(channelChartRef.value);
+  channelChart.setOption({
+    title: { text: '渠道使用分布', left: 'center', textStyle: { fontSize: 14 } },
     tooltip: { trigger: 'item', formatter: '{b}: {c}次 ({d}%)' },
     legend: { bottom: '5%' },
     series: [{
-      type: 'pie',
-      radius: ['40%', '70%'],
-      avoidLabelOverlap: false,
+      type: 'pie', radius: ['40%', '70%'], avoidLabelOverlap: false,
       itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
       label: { show: false, position: 'center' },
       emphasis: { label: { show: true, fontSize: 18, fontWeight: 'bold' } },
       data: data.map(d => ({ name: d.name, value: d.count }))
     }]
-  };
-
-  channelChart.setOption(option);
+  });
 }
 
 function renderTokenChart(data: Array<{ day: string; prompt_tokens: number; completion_tokens: number }>) {
   if (!tokenChartRef.value) return;
-  if (!tokenChart) {
-    tokenChart = echarts.init(tokenChartRef.value);
-  }
-
-  const option: EChartsOption = {
-    title: { text: '近7天 Token 消耗（输入/输出）', left: 'center' },
+  if (!tokenChart) tokenChart = echarts.init(tokenChartRef.value);
+  tokenChart.setOption({
+    title: { text: 'Token 消耗（输入/输出）', left: 'center', textStyle: { fontSize: 14 } },
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
     legend: { bottom: 0 },
     grid: { left: '3%', right: '4%', bottom: '10%', containLabel: true },
     xAxis: { type: 'category', data: data.map(d => d.day) },
     yAxis: { type: 'value', name: 'Tokens' },
     series: [
-      {
-        name: '输入 Tokens',
-        type: 'bar',
-        stack: 'token',
-        data: data.map(d => d.prompt_tokens),
-        itemStyle: { color: '#2080f0' }
-      },
-      {
-        name: '输出 Tokens',
-        type: 'bar',
-        stack: 'token',
-        data: data.map(d => d.completion_tokens),
-        itemStyle: { color: '#18a058' }
-      }
+      { name: '输入', type: 'bar', stack: 'token', data: data.map(d => d.prompt_tokens), itemStyle: { color: '#2080f0' } },
+      { name: '输出', type: 'bar', stack: 'token', data: data.map(d => d.completion_tokens), itemStyle: { color: '#18a058' } }
     ]
-  };
+  });
+}
 
-  tokenChart.setOption(option);
+function renderUserRankChart(data: Array<{ api_key: string; count: number }>) {
+  if (!userRankChartRef.value) return;
+  if (!userRankChart) userRankChart = echarts.init(userRankChartRef.value);
+  const names = data.map(d => d.api_key);
+  const counts = data.map(d => d.count);
+  userRankChart.setOption({
+    title: { text: '用户调用排名 TOP 10', left: 'center', textStyle: { fontSize: 14 } },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'value' },
+    yAxis: { type: 'category', data: names, axisLabel: { fontSize: 11 } },
+    series: [{
+      name: '请求数', type: 'bar', data: counts,
+      itemStyle: { color: '#f0a020' }
+    }]
+  });
+}
+
+function renderModelChart(data: Array<{ name: string; count: number }>) {
+  if (!modelChartRef.value) return;
+  if (!modelChart) modelChart = echarts.init(modelChartRef.value);
+  modelChart.setOption({
+    title: { text: '模型调用分布 TOP 10', left: 'center', textStyle: { fontSize: 14 } },
+    tooltip: { trigger: 'item', formatter: '{b}: {c}次 ({d}%)' },
+    legend: { bottom: '5%' },
+    series: [{
+      type: 'pie', radius: ['40%', '70%'], avoidLabelOverlap: false,
+      itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
+      label: { show: false, position: 'center' },
+      emphasis: { label: { show: true, fontSize: 16, fontWeight: 'bold' } },
+      data: data.map(d => ({ name: d.name, value: d.count }))
+    }]
+  });
 }
 
 function handleResize() {
   trendChart?.resize();
   channelChart?.resize();
   tokenChart?.resize();
+  userRankChart?.resize();
+  modelChart?.resize();
 }
 
 onMounted(() => {
@@ -190,6 +204,8 @@ onUnmounted(() => {
   trendChart?.dispose();
   channelChart?.dispose();
   tokenChart?.dispose();
+  userRankChart?.dispose();
+  modelChart?.dispose();
 });
 </script>
 
@@ -199,21 +215,10 @@ onUnmounted(() => {
     <NCard :bordered="false" class="card-wrapper">
       <NGrid :x-gap="12" :y-gap="8" responsive="screen" item-responsive>
         <NGi span="24 s:8 m:5">
-          <NSelect
-            v-model:value="filterChannel"
-            :options="channelOptions"
-            placeholder="按渠道筛选"
-            clearable
-          />
+          <NSelect v-model:value="filterChannel" :options="channelOptions" placeholder="按渠道筛选" clearable />
         </NGi>
         <NGi span="24 s:8 m:5">
-          <NSelect
-            v-model:value="filterModel"
-            :options="modelOptions"
-            placeholder="按模型筛选"
-            clearable
-            filterable
-          />
+          <NSelect v-model:value="filterModel" :options="modelOptions" placeholder="按模型筛选" clearable filterable />
         </NGi>
         <NGi span="24 s:8 m:4">
           <NInputNumber v-model:value="filterDays" :min="1" :max="90" placeholder="天数" />
@@ -227,8 +232,8 @@ onUnmounted(() => {
       </NGrid>
     </NCard>
 
-    <!-- Stats Cards: uniform grid layout -->
-    <NGrid :x-gap="16" :y-gap="16" responsive="screen" cols="1 s:2 m:4" item-responsive>
+    <!-- Stats Cards: 7 cards -->
+    <NGrid :x-gap="16" :y-gap="16" responsive="screen" cols="1 s:2 m:3 xl:7" item-responsive>
       <NGi>
         <NCard :bordered="false" class="card-wrapper">
           <NStatistic label="总请求数" :value="stats.total_requests" />
@@ -246,16 +251,33 @@ onUnmounted(() => {
       </NGi>
       <NGi>
         <NCard :bordered="false" class="card-wrapper">
-          <NStatistic label="总Token消耗" :value="stats.total_tokens" />
+          <NStatistic label="成功次数" :value="stats.success_count" />
+        </NCard>
+      </NGi>
+      <NGi>
+        <NCard :bordered="false" class="card-wrapper">
+          <NStatistic label="失败次数" :value="stats.failure_count" />
+        </NCard>
+      </NGi>
+      <NGi>
+        <NCard :bordered="false" class="card-wrapper">
+          <NStatistic label="P95 耗时" :value="stats.p95_latency_ms">
+            <template #suffix>ms</template>
+          </NStatistic>
+        </NCard>
+      </NGi>
+      <NGi>
+        <NCard :bordered="false" class="card-wrapper">
+          <NStatistic label="总 Token" :value="stats.total_tokens" />
         </NCard>
       </NGi>
     </NGrid>
 
-    <!-- Charts -->
+    <!-- Charts: Row 1 -->
     <NGrid :x-gap="16" :y-gap="16" responsive="screen" item-responsive>
       <NGi span="24 s:24 m:16">
         <NCard :bordered="false" class="card-wrapper">
-          <template #header><span class="card-title">近7天请求趋势</span></template>
+          <template #header><span class="card-title">请求趋势</span></template>
           <div ref="trendChartRef" style="width: 100%; height: 350px"></div>
         </NCard>
       </NGi>
@@ -267,9 +289,25 @@ onUnmounted(() => {
       </NGi>
     </NGrid>
 
-    <!-- Token consumption chart -->
+    <!-- Charts: Row 2 -->
+    <NGrid :x-gap="16" :y-gap="16" responsive="screen" item-responsive>
+      <NGi span="24 s:24 m:12">
+        <NCard :bordered="false" class="card-wrapper">
+          <template #header><span class="card-title">用户调用排名 TOP 10</span></template>
+          <div ref="userRankChartRef" style="width: 100%; height: 350px"></div>
+        </NCard>
+      </NGi>
+      <NGi span="24 s:24 m:12">
+        <NCard :bordered="false" class="card-wrapper">
+          <template #header><span class="card-title">模型调用分布 TOP 10</span></template>
+          <div ref="modelChartRef" style="width: 100%; height: 350px"></div>
+        </NCard>
+      </NGi>
+    </NGrid>
+
+    <!-- Charts: Row 3 -->
     <NCard :bordered="false" class="card-wrapper">
-      <template #header><span class="card-title">近7天 Token 消耗（输入/输出）</span></template>
+      <template #header><span class="card-title">Token 消耗（输入/输出）</span></template>
       <div ref="tokenChartRef" style="width: 100%; height: 350px"></div>
     </NCard>
   </NSpace>
