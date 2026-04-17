@@ -6,11 +6,12 @@ backend/data/*.db
 # Node
 web/node_modules/
 web/dist/
-web/.env*
 
 # Root env
 .env
 !.env.example
+
+# Keep web env files (they don't contain secrets, only VITE_* configs)
 
 # IDE
 .vscode/
