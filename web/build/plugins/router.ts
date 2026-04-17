@@ -25,11 +25,12 @@ const routeTitleMap: Record<string, string> = {
 
 const routeOrderMap: Record<string, number> = {
   home: 1,
-  routing: 2,
-  upstream: 3,
-  control: 4,
-  data: 5,
-  settings: 6
+  user: 2,
+  routing: 3,
+  upstream: 4,
+  control: 5,
+  data: 6,
+  settings: 7
 };
 
 // Routes that require admin role
