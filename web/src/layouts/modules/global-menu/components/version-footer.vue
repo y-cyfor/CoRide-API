@@ -6,6 +6,10 @@ defineOptions({
   name: 'VersionFooter'
 });
 
+defineProps<{
+  inverted?: boolean;
+}>();
+
 const { versionInfo, startAutoCheck } = useVersionCheck();
 
 onMounted(() => {
@@ -14,7 +18,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="version-footer">
+  <div class="version-footer" :class="{ inverted }">
     <a
       v-if="versionInfo.hasUpdate"
       :href="versionInfo.releaseUrl"
@@ -39,8 +43,7 @@ onMounted(() => {
   justify-content: center;
   padding: 8px 0;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.45);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(128, 128, 128, 0.15);
   flex-shrink: 0;
 }
 
@@ -52,15 +55,33 @@ onMounted(() => {
   transition: color 0.2s;
 }
 
-.version-link:hover {
+/* Dark/inverted sidebar: light text */
+.version-footer .version-link {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.version-footer .version-link:hover {
   color: rgba(255, 255, 255, 0.85);
 }
 
-.version-link.has-update {
+/* Light sidebar: dark text */
+.version-footer:not(.inverted) .version-link {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.version-footer:not(.inverted) .version-link:hover {
+  color: rgba(0, 0, 0, 0.85);
+}
+
+.version-footer .version-link.has-update {
   color: rgba(255, 255, 255, 0.65);
 }
 
-.version-link.has-update:hover {
+.version-footer:not(.inverted) .version-link.has-update {
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.version-footer .version-link.has-update:hover {
   color: #18a058;
 }
 

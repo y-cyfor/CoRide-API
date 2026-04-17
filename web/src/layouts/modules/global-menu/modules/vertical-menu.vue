@@ -59,7 +59,7 @@ watch(
           @update:value="routerPushByKeyWithMetaQuery"
         />
       </SimpleScrollbar>
-      <VersionFooter v-if="!appStore.siderCollapse" />
+      <VersionFooter v-if="!appStore.siderCollapse" :inverted="inverted" />
     </div>
   </Teleport>
 </template>
