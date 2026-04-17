@@ -60,6 +60,11 @@ pub async fn admin_auth_middleware(
         None => return auth_error_response("User not found"),
     }
 
+    // Check admin role
+    if claims.role != "admin" {
+        return admin_forbidden_response();
+    }
+
     // Inject claims into request extensions
     request.extensions_mut().insert(claims.user_id);
     request.extensions_mut().insert(claims.username);
@@ -76,6 +81,19 @@ fn auth_error_response(message: &str) -> Response {
     });
     Response::builder()
         .status(StatusCode::UNAUTHORIZED)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap()
+}
+
+fn admin_forbidden_response() -> Response {
+    let body = json!({
+        "code": 403,
+        "message": "Forbidden: admin access required",
+        "data": null,
+    });
+    Response::builder()
+        .status(StatusCode::FORBIDDEN)
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(body.to_string()))
         .unwrap()

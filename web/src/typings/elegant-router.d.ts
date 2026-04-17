@@ -37,6 +37,8 @@ declare module "@elegant-router/types" {
     "upstream": "/upstream";
     "upstream_channel": "/upstream/channel";
     "upstream_model": "/upstream/model";
+    "user": "/user";
+    "user_key": "/user/key";
   };
 
   /**
@@ -79,6 +81,7 @@ declare module "@elegant-router/types" {
     | "routing"
     | "settings"
     | "upstream"
+    | "user"
   >;
 
   /**
@@ -111,6 +114,7 @@ declare module "@elegant-router/types" {
     | "settings"
     | "upstream_channel"
     | "upstream_model"
+    | "user_key"
   >;
 
   /**

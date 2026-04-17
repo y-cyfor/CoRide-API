@@ -248,6 +248,8 @@ const local: App.I18n.Schema = {
     settings: 'System Settings',
     'system-settings': 'System Settings',
     system_settings: 'System Settings',
+    user: 'User Center',
+    user_key: 'Key Management',
     manage_routing: 'Request Routing',
     manage_routing_app_profile: 'App Profiles',
     manage_routing_traffic_plan: 'Traffic Plans',

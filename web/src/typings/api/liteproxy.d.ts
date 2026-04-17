@@ -229,4 +229,36 @@ declare namespace Api {
       active_users: number;
     }
   }
+
+  /** UserKey types */
+  namespace UserKey {
+    interface UserKey {
+      id: number;
+      user_id: number;
+      key_value: string;
+      name?: string;
+      enabled_models?: string;
+      status: string;
+      created_at: string;
+    }
+
+    interface UserKeyWithUsername {
+      id: number;
+      user_id: number;
+      username: string;
+      key_value: string;
+      name?: string;
+      enabled_models?: string;
+      status: string;
+      created_at: string;
+    }
+
+    interface CreateResult {
+      id: number;
+      key_value: string;
+      name?: string;
+      enabled_models?: string;
+      status: string;
+    }
+  }
 }

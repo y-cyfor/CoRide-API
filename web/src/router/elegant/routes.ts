@@ -46,7 +46,8 @@ export const generatedRoutes: GeneratedRoute[] = [
     meta: {
       title: '流量控制',
       i18nKey: 'route.control',
-      order: 4
+      order: 4,
+      roles: ['admin']
     },
     children: [
       {
@@ -55,7 +56,8 @@ export const generatedRoutes: GeneratedRoute[] = [
         component: 'view.control_quota',
         meta: {
           title: '配额管理',
-          i18nKey: 'route.control_quota'
+          i18nKey: 'route.control_quota',
+          roles: ['admin']
         }
       },
       {
@@ -64,7 +66,8 @@ export const generatedRoutes: GeneratedRoute[] = [
         component: 'view.control_ratelimit',
         meta: {
           title: '限流管理',
-          i18nKey: 'route.control_ratelimit'
+          i18nKey: 'route.control_ratelimit',
+          roles: ['admin']
         }
       },
       {
@@ -73,7 +76,8 @@ export const generatedRoutes: GeneratedRoute[] = [
         component: 'view.control_user',
         meta: {
           title: '用户管理',
-          i18nKey: 'route.control_user'
+          i18nKey: 'route.control_user',
+          roles: ['admin']
         }
       }
     ]
@@ -148,7 +152,8 @@ export const generatedRoutes: GeneratedRoute[] = [
     meta: {
       title: '请求分流',
       i18nKey: 'route.routing',
-      order: 2
+      order: 2,
+      roles: ['admin']
     },
     children: [
       {
@@ -157,7 +162,8 @@ export const generatedRoutes: GeneratedRoute[] = [
         component: 'view.routing_app-profile',
         meta: {
           title: '应用预设',
-          i18nKey: 'route.routing_app-profile'
+          i18nKey: 'route.routing_app-profile',
+          roles: ['admin']
         }
       },
       {
@@ -166,7 +172,8 @@ export const generatedRoutes: GeneratedRoute[] = [
         component: 'view.routing_traffic-plan',
         meta: {
           title: '应用方案',
-          i18nKey: 'route.routing_traffic-plan'
+          i18nKey: 'route.routing_traffic-plan',
+          roles: ['admin']
         }
       }
     ]
@@ -178,7 +185,8 @@ export const generatedRoutes: GeneratedRoute[] = [
     meta: {
       title: '系统设置',
       i18nKey: 'route.settings',
-      order: 6
+      order: 6,
+      roles: ['admin']
     }
   },
   {
@@ -188,7 +196,8 @@ export const generatedRoutes: GeneratedRoute[] = [
     meta: {
       title: '上游模型',
       i18nKey: 'route.upstream',
-      order: 3
+      order: 3,
+      roles: ['admin']
     },
     children: [
       {
@@ -197,7 +206,8 @@ export const generatedRoutes: GeneratedRoute[] = [
         component: 'view.upstream_channel',
         meta: {
           title: '渠道管理',
-          i18nKey: 'route.upstream_channel'
+          i18nKey: 'route.upstream_channel',
+          roles: ['admin']
         }
       },
       {
@@ -206,7 +216,28 @@ export const generatedRoutes: GeneratedRoute[] = [
         component: 'view.upstream_model',
         meta: {
           title: '模型管理',
-          i18nKey: 'route.upstream_model'
+          i18nKey: 'route.upstream_model',
+          roles: ['admin']
+        }
+      }
+    ]
+  },
+  {
+    name: 'user',
+    path: '/user',
+    component: 'layout.base',
+    meta: {
+      title: 'user',
+      i18nKey: 'route.user'
+    },
+    children: [
+      {
+        name: 'user_key',
+        path: '/user/key',
+        component: 'view.user_key',
+        meta: {
+          title: 'user_key',
+          i18nKey: 'route.user_key'
         }
       }
     ]

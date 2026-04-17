@@ -1267,3 +1267,111 @@ pub async fn resolve_app_profile_for_channel(
     // Fallback
     get_app_profile_by_id(pool, slots[0].app_profile_id).await
 }
+
+// === User API Keys ===
+
+#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+pub struct UserKey {
+    pub id: i64,
+    pub user_id: i64,
+    pub key_value: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled_models: Option<String>,
+    pub status: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+pub struct UserKeyWithUsername {
+    pub id: i64,
+    pub user_id: i64,
+    pub username: String,
+    pub key_value: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled_models: Option<String>,
+    pub status: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+pub async fn create_user_key(
+    pool: &SqlitePool,
+    user_id: i64,
+    key_value: &str,
+    name: Option<&str>,
+    enabled_models: Option<&str>,
+) -> Result<i64, sqlx::Error> {
+    let row: (i64,) = sqlx::query_as(
+        "INSERT INTO user_keys (user_id, key_value, name, enabled_models) VALUES (?, ?, ?, ?) RETURNING id"
+    )
+    .bind(user_id)
+    .bind(key_value)
+    .bind(name)
+    .bind(enabled_models)
+    .fetch_one(pool)
+    .await?;
+    Ok(row.0)
+}
+
+pub async fn get_user_key_by_value(pool: &SqlitePool, key_value: &str) -> Result<Option<UserKey>, sqlx::Error> {
+    sqlx::query_as::<_, UserKey>(
+        "SELECT * FROM user_keys WHERE key_value = ? AND status = 'active'"
+    )
+    .bind(key_value)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn list_user_keys_by_user(pool: &SqlitePool, user_id: i64) -> Result<Vec<UserKey>, sqlx::Error> {
+    sqlx::query_as::<_, UserKey>(
+        "SELECT * FROM user_keys WHERE user_id = ? ORDER BY created_at DESC"
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn list_all_user_keys(pool: &SqlitePool) -> Result<Vec<UserKeyWithUsername>, sqlx::Error> {
+    sqlx::query_as::<_, UserKeyWithUsername>(
+        "SELECT uk.*, u.username FROM user_keys uk JOIN users u ON u.id = uk.user_id ORDER BY uk.created_at DESC"
+    )
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn update_user_key(
+    pool: &SqlitePool,
+    key_id: i64,
+    user_id: i64,
+    name: Option<&str>,
+    enabled_models: Option<&str>,
+    status: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    let mut q = sqlx::query(
+        "UPDATE user_keys SET name = COALESCE(?, name), enabled_models = COALESCE(?, enabled_models)"
+    );
+    if let Some(s) = status {
+        q = sqlx::query(
+            "UPDATE user_keys SET name = COALESCE(?, name), enabled_models = COALESCE(?, enabled_models), status = COALESCE(?, status) WHERE id = ? AND user_id = ?"
+        ).bind(name).bind(enabled_models).bind(s).bind(key_id).bind(user_id);
+    } else {
+        q = sqlx::query(
+            "UPDATE user_keys SET name = COALESCE(?, name), enabled_models = COALESCE(?, enabled_models) WHERE id = ? AND user_id = ?"
+        ).bind(name).bind(enabled_models).bind(key_id).bind(user_id);
+    }
+    q.execute(pool).await?;
+    Ok(())
+}
+
+pub async fn delete_user_key(pool: &SqlitePool, key_id: i64, user_id: i64) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM user_keys WHERE id = ? AND user_id = ?")
+        .bind(key_id)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+

@@ -31,4 +31,5 @@ export const views: Record<LastLevelRouteKey, RouteComponent | (() => Promise<Ro
   settings: () => import("@/views/settings/index.vue"),
   upstream_channel: () => import("@/views/upstream/channel/index.vue"),
   upstream_model: () => import("@/views/upstream/model/index.vue"),
+  user_key: () => import("@/views/user/key/index.vue"),
 };

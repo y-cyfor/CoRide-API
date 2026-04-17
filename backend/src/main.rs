@@ -78,6 +78,15 @@ async fn main() {
         // Auth (public)
         .route("/admin/auth/login", post(admin_routes::login));
 
+    // User-facing routes (JWT auth, not admin-only)
+    let user_routes = Router::new()
+        .route("/user/info", get(admin_routes::get_user_info))
+        .route("/user/keys", get(admin_routes::list_user_keys))
+        .route("/user/keys", post(admin_routes::create_user_key))
+        .route("/user/keys/{id}", put(admin_routes::update_user_key))
+        .route("/user/keys/{id}", delete(admin_routes::delete_user_key))
+        .layer(from_fn_with_state(state.clone(), admin_auth::admin_auth_middleware));
+
     let admin_protected = Router::new()
         // Auth (protected)
         .route("/admin/auth/me", get(admin_routes::get_me))
@@ -125,6 +134,9 @@ async fn main() {
         .route("/admin/logs/export", get(admin_routes::export_logs_csv))
         // Logs
         .route("/admin/logs", get(admin_routes::list_logs))
+        // User keys (admin view)
+        .route("/admin/keys", get(admin_routes::list_all_user_keys))
+        .route("/admin/keys/{user_id}", get(admin_routes::list_user_keys_by_user_id))
         // Traffic plans
         .route("/admin/traffic-plan/global", get(admin_routes::get_global_traffic_plan))
         .route("/admin/traffic-plan/global", put(admin_routes::upsert_global_traffic_plan))
@@ -140,6 +152,7 @@ async fn main() {
         .route("/health", get(health_check))
         .merge(proxy_routes)
         .merge(admin_public)
+        .merge(user_routes)
         .merge(admin_protected)
         .layer(CorsLayer::new()
             .allow_origin(Any)

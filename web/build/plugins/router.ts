@@ -32,6 +32,14 @@ const routeOrderMap: Record<string, number> = {
   settings: 6
 };
 
+// Routes that require admin role
+const adminRoutes: RouteKey[] = [
+  'routing', 'routing_app-profile', 'routing_traffic-plan',
+  'upstream', 'upstream_channel', 'upstream_model',
+  'control', 'control_quota', 'control_ratelimit', 'control_user',
+  'settings'
+];
+
 export function setupElegantRouter() {
   return ElegantVueRouter({
     layouts: {
@@ -72,6 +80,11 @@ export function setupElegantRouter() {
 
       if (key === 'iframe-page') {
         meta.hideInMenu = true;
+      }
+
+      // Set admin-only routes
+      if (adminRoutes.includes(key)) {
+        meta.roles = ['admin'];
       }
 
       return meta;

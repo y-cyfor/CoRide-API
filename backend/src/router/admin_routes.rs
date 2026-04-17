@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Extension, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
@@ -1501,3 +1501,123 @@ pub async fn delete_channel_traffic_plan(
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
     }
 }
+
+// === User-facing endpoints (JWT auth, not admin-only) ===
+
+#[derive(Debug, Deserialize)]
+pub struct CreateUserKeyRequest {
+    pub name: Option<String>,
+    pub enabled_models: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateUserKeyRequest {
+    pub name: Option<String>,
+    pub enabled_models: Option<String>,
+    pub status: Option<String>,
+}
+
+/// GET /user/keys - List current user's API keys
+pub async fn list_user_keys(
+    State(state): State<Arc<AppState>>,
+    Extension(user_id): Extension<i64>,
+) -> Response {
+    let pool = &state.db;
+    match models::list_user_keys_by_user(pool, user_id).await {
+        Ok(keys) => ok_response(keys),
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
+/// POST /user/keys - Create new API key for current user
+pub async fn create_user_key(
+    State(state): State<Arc<AppState>>,
+    Extension(user_id): Extension<i64>,
+    Json(req): Json<CreateUserKeyRequest>,
+) -> Response {
+    let pool = &state.db;
+    let key_value = format!("sk-{}", Uuid::new_v4().simple());
+
+    match models::create_user_key(pool, user_id, &key_value, req.name.as_deref(), req.enabled_models.as_deref()).await {
+        Ok(id) => ok_response(serde_json::json!({
+            "id": id,
+            "key_value": key_value,
+            "name": req.name,
+            "enabled_models": req.enabled_models,
+            "status": "active"
+        })),
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
+/// PUT /user/keys/{id} - Update user's own key
+pub async fn update_user_key(
+    State(state): State<Arc<AppState>>,
+    Extension(user_id): Extension<i64>,
+    Path(key_id): Path<i64>,
+    Json(req): Json<UpdateUserKeyRequest>,
+) -> Response {
+    let pool = &state.db;
+    match models::update_user_key(pool, key_id, user_id, req.name.as_deref(), req.enabled_models.as_deref(), req.status.as_deref()).await {
+        Ok(()) => ok_response(serde_json::json!({ "updated": true })),
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
+/// DELETE /user/keys/{id} - Delete user's own key
+pub async fn delete_user_key(
+    State(state): State<Arc<AppState>>,
+    Extension(user_id): Extension<i64>,
+    Path(key_id): Path<i64>,
+) -> Response {
+    let pool = &state.db;
+    match models::delete_user_key(pool, key_id, user_id).await {
+        Ok(()) => ok_response(serde_json::json!({ "deleted": true })),
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
+/// GET /admin/keys - List all user keys (admin only)
+pub async fn list_all_user_keys(
+    State(state): State<Arc<AppState>>,
+) -> Response {
+    let pool = &state.db;
+    match models::list_all_user_keys(pool).await {
+        Ok(keys) => ok_response(keys),
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
+/// GET /admin/keys/{user_id} - List keys for a specific user (admin only)
+pub async fn list_user_keys_by_user_id(
+    State(state): State<Arc<AppState>>,
+    Path(user_id): Path<i64>,
+) -> Response {
+    let pool = &state.db;
+    match models::list_user_keys_by_user(pool, user_id).await {
+        Ok(keys) => ok_response(keys),
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
+/// GET /user/info - Get current user info (JWT auth)
+pub async fn get_user_info(
+    State(state): State<Arc<AppState>>,
+    Extension(user_id): Extension<i64>,
+) -> Response {
+    let pool = &state.db;
+    match models::get_user_by_id(pool, user_id).await {
+        Ok(Some(user)) => ok_response(serde_json::json!({
+            "id": user.id,
+            "username": user.username,
+            "role": user.role,
+            "status": user.status,
+            "enabled_models": user.enabled_models,
+            "note": user.note,
+            "created_at": user.created_at,
+        })),
+        Ok(None) => error_response(StatusCode::NOT_FOUND, "User not found"),
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+

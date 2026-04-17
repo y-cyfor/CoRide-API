@@ -244,6 +244,8 @@ const local: App.I18n.Schema = {
     settings: '系统设置',
     'system-settings': '系统设置',
     system_settings: '系统设置',
+    user: '用户中心',
+    user_key: 'Key 管理',
     manage_routing: '请求分流',
     manage_routing_app_profile: '应用预设',
     manage_routing_traffic_plan: '应用方案',

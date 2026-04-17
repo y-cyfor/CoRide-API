@@ -182,7 +182,9 @@ const routeMap: RouteMap = {
   "settings": "/settings",
   "upstream": "/upstream",
   "upstream_channel": "/upstream/channel",
-  "upstream_model": "/upstream/model"
+  "upstream_model": "/upstream/model",
+  "user": "/user",
+  "user_key": "/user/key"
 };
 
 /**

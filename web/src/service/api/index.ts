@@ -8,3 +8,4 @@ export * from './ratelimit';
 export * from './app-profile';
 export * from './log';
 export * from './stats';
+export * from './user-key';
