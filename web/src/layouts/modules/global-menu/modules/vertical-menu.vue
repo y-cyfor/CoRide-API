@@ -8,6 +8,7 @@ import { useThemeStore } from '@/store/modules/theme';
 import { useRouteStore } from '@/store/modules/route';
 import { useRouterPush } from '@/hooks/common/router';
 import { useMenu } from '../context';
+import VersionFooter from '../components/version-footer.vue';
 
 defineOptions({
   name: 'VerticalMenu'
@@ -43,20 +44,23 @@ watch(
 
 <template>
   <Teleport :to="`#${GLOBAL_SIDER_MENU_ID}`">
-    <SimpleScrollbar>
-      <NMenu
-        v-model:expanded-keys="expandedKeys"
-        mode="vertical"
-        :value="selectedKey"
-        :collapsed="appStore.siderCollapse"
-        :collapsed-width="themeStore.sider.collapsedWidth"
-        :collapsed-icon-size="22"
-        :options="routeStore.menus"
-        :inverted="inverted"
-        :indent="18"
-        @update:value="routerPushByKeyWithMetaQuery"
-      />
-    </SimpleScrollbar>
+    <div class="flex-col-stretch h-full">
+      <SimpleScrollbar class="flex-1-hidden">
+        <NMenu
+          v-model:expanded-keys="expandedKeys"
+          mode="vertical"
+          :value="selectedKey"
+          :collapsed="appStore.siderCollapse"
+          :collapsed-width="themeStore.sider.collapsedWidth"
+          :collapsed-icon-size="22"
+          :options="routeStore.menus"
+          :inverted="inverted"
+          :indent="18"
+          @update:value="routerPushByKeyWithMetaQuery"
+        />
+      </SimpleScrollbar>
+      <VersionFooter v-if="!appStore.siderCollapse" />
+    </div>
   </Teleport>
 </template>
 

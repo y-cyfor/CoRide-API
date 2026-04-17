@@ -116,3 +116,6 @@ declare namespace Env {
 interface ImportMeta {
   readonly env: Env.ImportMeta;
 }
+
+/** Package version from package.json, injected by Vite */
+declare const PACKAGE_VERSION: string;
