@@ -13,7 +13,7 @@ use tracing_subscriber::EnvFilter;
 
 use coride_api::config;
 use coride_api::db::{self, models};
-use coride_api::middleware::{admin_auth, auth, rate_limit};
+use coride_api::middleware::{admin_auth, auth, rate_limit, user_auth};
 use coride_api::router::{admin_routes, proxy_routes};
 use coride_api::state::app_state as state_builder;
 use coride_api::AppState;
@@ -85,7 +85,10 @@ async fn main() {
         .route("/user/keys", post(admin_routes::create_user_key))
         .route("/user/keys/{id}", put(admin_routes::update_user_key))
         .route("/user/keys/{id}", delete(admin_routes::delete_user_key))
-        .layer(from_fn_with_state(state.clone(), admin_auth::admin_auth_middleware));
+        .route("/user/stats/dashboard", get(admin_routes::user_dashboard_stats))
+        .route("/user/stats/usage", get(admin_routes::user_usage_stats))
+        .route("/user/logs", get(admin_routes::user_logs))
+        .layer(from_fn_with_state(state.clone(), user_auth::user_auth_middleware));
 
     let admin_protected = Router::new()
         // Auth (protected)

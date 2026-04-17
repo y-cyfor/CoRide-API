@@ -230,7 +230,6 @@ export const generatedRoutes: GeneratedRoute[] = [
       title: 'user',
       i18nKey: 'route.user',
       order: 2,
-      roles: ['admin']
     },
     children: [
       {
@@ -240,7 +239,6 @@ export const generatedRoutes: GeneratedRoute[] = [
         meta: {
           title: 'user_key',
           i18nKey: 'route.user_key',
-          roles: ['admin']
         }
       }
     ]

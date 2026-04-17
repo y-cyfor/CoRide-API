@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
+import { useAuthStore } from '@/store/modules/auth';
 import { NCard, NSpace, NStatistic, NTag, NSelect, NButton, NGrid, NGi, NInputNumber } from 'naive-ui';
 import { fetchUsageStats, fetchDashboardStats, fetchChannelList, fetchModelList } from '@/service/api';
+import { request } from '@/service/request';
 import * as echarts from 'echarts';
 import type { EChartsOption } from 'echarts';
+
+const authStore = useAuthStore();
+const isAdmin = ref(authStore.userInfo.role === 'admin');
 
 const loading = ref(false);
 const stats = ref({
@@ -56,20 +61,48 @@ async function loadFilterOptions() {
 async function loadData() {
   loading.value = true;
 
-  const [dashRes, usageRes] = await Promise.all([
-    fetchDashboardStats(),
-    fetchUsageStats({
-      channel_id: filterChannel.value,
-      model: filterModel.value || undefined,
-      days: filterDays.value
-    })
-  ]);
-
-  if (dashRes.data) {
-    stats.value = {
-      total_requests: dashRes.data.total_requests || 0,
-      today_requests: dashRes.data.today_requests || 0,
-      active_users: dashRes.data.active_users || 0,
+  let usageRes: any;
+  if (isAdmin.value) {
+    const [dashRes, uRes] = await Promise.all([
+      fetchDashboardStats(),
+      fetchUsageStats({
+        channel_id: filterChannel.value,
+        model: filterModel.value || undefined,
+        days: filterDays.value
+      })
+    ]);
+    if (dashRes.data) {
+      stats.value = {
+        total_requests: dashRes.data.total_requests || 0,
+        today_requests: dashRes.data.today_requests || 0,
+        active_users: dashRes.data.active_users || 0,
+        success_count: dashRes.data.success_count || 0,
+        failure_count: dashRes.data.failure_count || 0,
+        total_tokens: uRes.data?.total_tokens || 0,
+        p95_latency_ms: dashRes.data.p95_latency_ms || 0,
+        error_rate: dashRes.data.error_rate || '0.0%'
+      };
+    }
+    usageRes = uRes;
+  } else {
+    const [dashRes, uRes] = await Promise.all([
+      request({ url: '/user/stats/dashboard', method: 'get' }),
+      request({ url: '/user/stats/usage', method: 'get', params: { days: filterDays.value } })
+    ]);
+    if (dashRes.data) {
+      stats.value = {
+        total_requests: dashRes.data.total_requests || 0,
+        today_requests: dashRes.data.today_requests || 0,
+        active_users: dashRes.data.active_users || 0,
+        success_count: dashRes.data.success_count || 0,
+        failure_count: dashRes.data.failure_count || 0,
+        total_tokens: uRes.data?.total_tokens || 0,
+        p95_latency_ms: dashRes.data.p95_latency_ms || 0,
+        error_rate: dashRes.data.error_rate || '0.0%'
+      };
+    }
+    usageRes = uRes;
+  }
       success_count: dashRes.data.success_count || 0,
       failure_count: dashRes.data.failure_count || 0,
       total_tokens: usageRes.data?.total_tokens || 0,

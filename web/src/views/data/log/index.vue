@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { ref, h, onMounted } from 'vue';
+import { useAuthStore } from '@/store/modules/auth';
 import { NSpace, NTag, NCard, NDataTable, NButton, NDrawer, NDrawerContent, NDescriptions, NDescriptionsItem, NCode, useMessage, NSelect, NInput, NGrid, NGi, NDatePicker } from 'naive-ui';
 import { fetchLogList, exportLogsCsv, fetchModelList } from '@/service/api';
+import { request } from '@/service/request';
 import type { DataTableColumns } from 'naive-ui';
+
+const authStore = useAuthStore();
+const isAdmin = ref(authStore.userInfo.role === 'admin');
 
 const loading = ref(false);
 const logs = ref<Api.Log.RequestLog[]>([]);
@@ -80,10 +85,25 @@ async function loadData() {
     filterParams.end_time = new Date(filterDateRange.value[1]).toISOString().split('T')[0] + 'T23:59:59';
   }
 
-  const { data, error } = await fetchLogList(pagination.value.page, pagination.value.pageSize, filterParams);
+  let data: any, error: any;
+  if (isAdmin.value) {
+    const res = await fetchLogList(pagination.value.page, pagination.value.pageSize, filterParams);
+    data = res.data;
+    error = res.error;
+  } else {
+    const res = await request({
+      url: '/user/logs',
+      method: 'get',
+      params: { page: pagination.value.page, page_size: pagination.value.pageSize, ...filterParams }
+    });
+    data = res.data;
+    error = res.error;
+  }
+
   if (!error && data) {
-    logs.value = data as Api.Log.RequestLog[];
-    pagination.value.itemCount = data.length;
+    const items = (data as any).items || data;
+    logs.value = items as Api.Log.RequestLog[];
+    pagination.value.itemCount = (data as any).total || items.length;
   }
   loading.value = false;
 }

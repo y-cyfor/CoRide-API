@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, nextTick, h } from 'vue';
 import { useAppStore } from '@/store/modules/app';
+import { useAuthStore } from '@/store/modules/auth';
 import { NCard, NSpace, NStatistic, NTag, NSelect, NButton, NGrid, NGi, NInputNumber, NDataTable, NAlert } from 'naive-ui';
 import { fetchUsageStats, fetchDashboardStats, fetchChannelList, fetchModelList, fetchRecentLogs, fetchQuotaWarnings } from '@/service/api';
+import { request } from '@/service/request';
 import * as echarts from 'echarts';
 import type { EChartsOption } from 'echarts';
 
 const appStore = useAppStore();
+const authStore = useAuthStore();
 const gap = computed(() => (appStore.isMobile ? 0 : 16));
+const isAdmin = computed(() => authStore.userInfo.role === 'admin');
 
 const loading = ref(false);
 const stats = ref({
@@ -46,6 +50,7 @@ const channelOptions = ref<{ label: string; value: number }[]>([]);
 const modelOptions = ref<{ label: string; value: string }[]>([]);
 
 async function loadFilterOptions() {
+  if (!isAdmin.value) return;
   const { data: chData } = await fetchChannelList(1, 100);
   if (chData) {
     const items = chData.items || chData;
@@ -67,36 +72,42 @@ async function loadFilterOptions() {
 async function loadData() {
   loading.value = true;
 
-  const [dashRes, usageRes] = await Promise.all([
-    fetchDashboardStats(),
-    fetchUsageStats({
-      channel_id: filterChannel.value,
-      model: filterModel.value || undefined,
-      days: filterDays.value
-    })
-  ]);
-
-  if (dashRes.data) {
-    Object.assign(stats.value, dashRes.data);
-    stats.value.total_tokens = usageRes.data?.total_tokens || 0;
-  }
-
-  if (usageRes.data) {
-    usageData.value = usageRes.data;
-    await nextTick();
-    renderTrendChart(usageRes.data.daily_trend);
-    renderChannelChart(usageRes.data.channel_usage);
-    renderTokenChart(usageRes.data.token_daily || []);
-  }
-
-  const { data: recent, error: err3 } = await fetchRecentLogs(10);
-  if (!err3 && recent) {
-    recentLogs.value = recent;
-  }
-
-  const { data: warnings, error: err4 } = await fetchQuotaWarnings();
-  if (!err4 && warnings) {
-    quotaWarnings.value = warnings.warnings || [];
+  if (isAdmin.value) {
+    const [dashRes, usageRes] = await Promise.all([
+      fetchDashboardStats(),
+      fetchUsageStats({
+        channel_id: filterChannel.value,
+        model: filterModel.value || undefined,
+        days: filterDays.value
+      })
+    ]);
+    if (dashRes.data) {
+      Object.assign(stats.value, dashRes.data);
+      stats.value.total_tokens = usageRes.data?.total_tokens || 0;
+    }
+    if (usageRes.data) {
+      usageData.value = usageRes.data;
+      await nextTick();
+      renderTrendChart(usageRes.data.daily_trend);
+      renderChannelChart(usageRes.data.channel_usage);
+      renderTokenChart(usageRes.data.token_daily || []);
+    }
+    const { data: recent, error: err3 } = await fetchRecentLogs(10);
+    if (!err3 && recent) recentLogs.value = recent;
+    const { data: warnings, error: err4 } = await fetchQuotaWarnings();
+    if (!err4 && warnings) quotaWarnings.value = warnings.warnings || [];
+  } else {
+    const [dashRes, usageRes] = await Promise.all([
+      request({ url: '/user/stats/dashboard', method: 'get' }),
+      request({ url: '/user/stats/usage', method: 'get', params: { days: filterDays.value } })
+    ]);
+    if (dashRes.data) Object.assign(stats.value, dashRes.data);
+    if (usageRes.data) {
+      usageData.value = usageRes.data;
+      await nextTick();
+      renderTrendChart(usageRes.data.daily_trend);
+      renderTokenChart(usageRes.data.token_daily || []);
+    }
   }
 
   loading.value = false;

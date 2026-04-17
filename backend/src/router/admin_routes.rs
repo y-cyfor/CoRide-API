@@ -7,6 +7,7 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
+use sqlx::Row;
 use uuid::Uuid;
 
 use crate::AppState;
@@ -1621,3 +1622,141 @@ pub async fn get_user_info(
     }
 }
 
+// === User-specific stats and logs endpoints (JWT auth, not admin-only) ===
+
+#[derive(Debug, Deserialize)]
+pub struct UserStatsQuery {
+    pub days: Option<i64>,
+}
+
+/// GET /user/stats/dashboard - Dashboard stats for current user
+pub async fn user_dashboard_stats(
+    State(state): State<Arc<AppState>>,
+    Extension(user_id): Extension<i64>,
+) -> Response {
+    let pool = &state.db;
+    let user_key: Option<String> = sqlx::query_scalar(
+        "SELECT api_key FROM users WHERE id = ?"
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten();
+
+    let key = match user_key {
+        Some(k) => k,
+        None => return error_response(StatusCode::NOT_FOUND, "User not found"),
+    };
+
+    let total_requests: Option<i64> = sqlx::query_scalar("SELECT COUNT(*) FROM request_logs WHERE user_api_key = ?").bind(&key).fetch_one(pool).await.ok();
+    let today_requests: Option<i64> = sqlx::query_scalar("SELECT COUNT(*) FROM request_logs WHERE user_api_key = ? AND created_at >= datetime('now', '-1 day')").bind(&key).fetch_one(pool).await.ok();
+    let total_tokens: Option<i64> = sqlx::query_scalar("SELECT COALESCE(SUM(total_tokens), 0) FROM request_logs WHERE user_api_key = ?").bind(&key).fetch_one(pool).await.ok();
+    let p95_ms: Option<i64> = sqlx::query_scalar("SELECT elapsed_ms FROM request_logs WHERE user_api_key = ? ORDER BY elapsed_ms DESC LIMIT 1 OFFSET (SELECT COUNT(*) * 95 / 100 FROM request_logs WHERE user_api_key = ?)").bind(&key).bind(&key).fetch_optional(pool).await.ok().flatten();
+    let error_count: Option<i64> = sqlx::query_scalar("SELECT COUNT(*) FROM request_logs WHERE user_api_key = ? AND status_code >= 400").bind(&key).fetch_one(pool).await.ok();
+
+    let total = total_requests.unwrap_or(0);
+    let errors = error_count.unwrap_or(0);
+    let error_rate = if total > 0 { format!("{:.1}%", (errors as f64 / total as f64) * 100.0) } else { "0.0%".to_string() };
+
+    ok_response(serde_json::json!({
+        "total_requests": total,
+        "today_requests": today_requests.unwrap_or(0),
+        "active_users": 1,
+        "total_tokens": total_tokens.unwrap_or(0),
+        "p95_latency_ms": p95_ms.unwrap_or(0),
+        "error_rate": error_rate,
+    }))
+}
+
+/// GET /user/stats/usage - Usage stats for current user
+pub async fn user_usage_stats(
+    State(state): State<Arc<AppState>>,
+    Extension(user_id): Extension<i64>,
+    Query(query): Query<UserStatsQuery>,
+) -> Response {
+    let pool = &state.db;
+    let days = query.days.unwrap_or(7);
+    let user_key: Option<String> = sqlx::query_scalar("SELECT api_key FROM users WHERE id = ?").bind(user_id).fetch_optional(pool).await.ok().flatten();
+    let key = match user_key { Some(k) => k, None => return error_response(StatusCode::NOT_FOUND, "User not found") };
+
+    let daily_trend: Vec<(String, i64)> = sqlx::query_as("SELECT strftime('%Y-%m-%d', created_at) as day, COUNT(*) as count FROM request_logs WHERE user_api_key = ? AND created_at >= datetime('now', ? || ' days') GROUP BY day ORDER BY day").bind(&key).bind(format!("-{}", days)).fetch_all(pool).await.unwrap_or_default();
+    let channel_usage: Vec<(String, i64)> = sqlx::query_as("SELECT COALESCE(c.name, 'Unknown'), COUNT(*) FROM request_logs r LEFT JOIN channels c ON c.id = r.channel_id WHERE r.user_api_key = ? AND created_at >= datetime('now', ? || ' days') GROUP BY r.channel_id ORDER BY COUNT(*) DESC LIMIT 10").bind(&key).bind(format!("-{}", days)).fetch_all(pool).await.unwrap_or_default();
+    let token_daily: Vec<(String, i64, i64)> = sqlx::query_as("SELECT strftime('%Y-%m-%d', created_at), COALESCE(SUM(prompt_tokens),0), COALESCE(SUM(completion_tokens),0) FROM request_logs WHERE user_api_key = ? AND created_at >= datetime('now', ? || ' days') GROUP BY day ORDER BY day").bind(&key).bind(format!("-{}", days)).fetch_all(pool).await.unwrap_or_default();
+    let total_tokens: Option<i64> = sqlx::query_scalar("SELECT COALESCE(SUM(total_tokens), 0) FROM request_logs WHERE user_api_key = ?").bind(&key).fetch_one(pool).await.ok();
+
+    ok_response(serde_json::json!({
+        "daily_trend": daily_trend.iter().map(|(d, c)| serde_json::json!({"day": d, "count": c})).collect::<Vec<_>>(),
+        "channel_usage": channel_usage.iter().map(|(n, c)| serde_json::json!({"name": n, "count": c})).collect::<Vec<_>>(),
+        "total_tokens": total_tokens.unwrap_or(0),
+        "token_daily": token_daily.iter().map(|(d, p, c)| serde_json::json!({"day": d, "prompt_tokens": p, "completion_tokens": c})).collect::<Vec<_>>(),
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UserLogsQuery {
+    pub page: Option<i64>,
+    pub page_size: Option<i64>,
+    pub model: Option<String>,
+    pub status_code: Option<String>,
+    pub start_time: Option<String>,
+    pub end_time: Option<String>,
+}
+
+/// GET /user/logs - Request logs for current user
+pub async fn user_logs(
+    State(state): State<Arc<AppState>>,
+    Extension(user_id): Extension<i64>,
+    Query(query): Query<UserLogsQuery>,
+) -> Response {
+    let pool = &state.db;
+    let page = query.page.unwrap_or(1);
+    let page_size = query.page_size.unwrap_or(20);
+    let user_key: Option<String> = sqlx::query_scalar("SELECT api_key FROM users WHERE id = ?").bind(user_id).fetch_optional(pool).await.ok().flatten();
+    let key = match user_key { Some(k) => k, None => return error_response(StatusCode::NOT_FOUND, "User not found") };
+
+    let mut conditions = vec!["user_api_key = ?".to_string()];
+    if query.model.is_some() { conditions.push("model = ?".to_string()); }
+    if query.status_code.is_some() { conditions.push("status_code / 100 = ?".to_string()); }
+    if query.start_time.is_some() { conditions.push("created_at >= ?".to_string()); }
+    if query.end_time.is_some() { conditions.push("created_at <= ?".to_string()); }
+    let where_clause = format!("WHERE {}", conditions.join(" AND "));
+
+    let total: i64 = {
+        let count_sql = format!("SELECT COUNT(*) FROM request_logs {}", where_clause);
+        let mut q = sqlx::query_scalar(&count_sql).bind(&key);
+        if let Some(ref v) = query.model { q = q.bind(v); }
+        if let Some(ref v) = query.status_code { q = q.bind(v); }
+        if let Some(ref v) = query.start_time { q = q.bind(v); }
+        if let Some(ref v) = query.end_time { q = q.bind(v); }
+        q.fetch_one(pool).await.unwrap_or(0)
+    };
+
+    let logs: Vec<serde_json::Value> = {
+        let sql = format!("SELECT * FROM request_logs {} ORDER BY created_at DESC LIMIT ? OFFSET ?", where_clause);
+        let mut q = sqlx::query(&sql).bind(&key);
+        if let Some(ref v) = query.model { q = q.bind(v); }
+        if let Some(ref v) = query.status_code { q = q.bind(v); }
+        if let Some(ref v) = query.start_time { q = q.bind(v); }
+        if let Some(ref v) = query.end_time { q = q.bind(v); }
+        let rows = q.bind(page_size).bind((page - 1) * page_size).fetch_all(pool).await.unwrap_or_default();
+        rows.into_iter().map(|row| {
+            let mut map = serde_json::Map::new();
+            map.insert("id".into(), row.try_get("id").unwrap_or(0i64).into());
+            map.insert("user_api_key".into(), serde_json::Value::String(row.try_get::<String, _>("user_api_key").unwrap_or_default()));
+            map.insert("channel_id".into(), row.try_get::<Option<i64>, _>("channel_id").map(|v| v.into()).unwrap_or(serde_json::Value::Null));
+            map.insert("model".into(), row.try_get("model").unwrap_or_default());
+            map.insert("endpoint".into(), row.try_get("endpoint").unwrap_or_default());
+            map.insert("status_code".into(), row.try_get("status_code").unwrap_or(0i64).into());
+            map.insert("prompt_tokens".into(), row.try_get("prompt_tokens").unwrap_or(0i64).into());
+            map.insert("completion_tokens".into(), row.try_get("completion_tokens").unwrap_or(0i64).into());
+            map.insert("total_tokens".into(), row.try_get("total_tokens").unwrap_or(0i64).into());
+            map.insert("elapsed_ms".into(), row.try_get("elapsed_ms").unwrap_or(0i64).into());
+            map.insert("error_message".into(), row.try_get::<Option<String>, _>("error_message").map(|v| v.into()).unwrap_or(serde_json::Value::Null));
+            map.insert("created_at".into(), row.try_get("created_at").unwrap_or_default());
+            serde_json::Value::Object(map)
+        }).collect()
+    };
+
+    ok_response(serde_json::json!({ "items": logs, "total": total }))
+}
