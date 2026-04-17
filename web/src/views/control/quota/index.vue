@@ -79,13 +79,6 @@ async function loadData() {
   loading.value = false;
 }
 
-async function loadUsers() {
-  const { data } = await fetchUserList(1, 100);
-  if (data) {
-    userOptions.value = data.map(u => ({ label: u.username, value: u.id }));
-  }
-}
-
 function handleCreate() {
   isEdit.value = false;
   editingId.value = null;
