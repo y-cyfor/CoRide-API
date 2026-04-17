@@ -1,0 +1,95 @@
+name: Create Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号 (如 0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create deploy package
+        run: |
+          mkdir -p coride-api-${{ github.event.inputs.version }}
+          cp docker-compose.yml coride-api-${{ github.event.inputs.version }}/
+          cp .env.example coride-api-${{ github.event.inputs.version }}/
+          cp backend/config/config.yaml coride-api-${{ github.event.inputs.version }}/config.yaml
+          cp README.md coride-api-${{ github.event.inputs.version }}/
+          cp LICENSE coride-api-${{ github.event.inputs.version }}/
+
+          # Add docker-compose image-only variant
+          cat > coride-api-${{ github.event.inputs.version }}/docker-compose.yml << 'EOF'
+          services:
+            coride-api:
+              image: cyfor/coride-api:latest
+              container_name: coride-api
+              restart: unless-stopped
+              ports:
+                - "80:80"
+              volumes:
+                - ./data:/app/data
+                - ./logs:/app/log
+              env_file:
+                - .env
+              environment:
+                - CORIDE_DB_PATH=/app/data/coride.db
+          EOF
+
+          cat > coride-api-${{ github.event.inputs.version }}/.env.example << 'EOF'
+          # 管理员账号
+          CORIDE_ADMIN_USERNAME=admin
+          CORIDE_ADMIN_PASSWORD=修改为你的密码
+
+          # JWT 密钥（必须修改为随机字符串）
+          CORIDE_JWT_SECRET=修改为随机密钥
+
+          # 日志级别
+          CORIDE_LOG_LEVEL=info
+          EOF
+
+          # Create README for the package
+          cat > coride-api-${{ github.event.inputs.version }}/README.md << EOF
+          # CoRide-API v${{ github.event.inputs.version }}
+
+          ## 快速部署
+
+          \`\`\`bash
+          # 1. 复制并编辑环境变量
+          cp .env.example .env
+          # 编辑 .env 设置管理员密码和 JWT Secret
+
+          # 2. 启动
+          docker compose up -d
+
+          # 3. 查看日志
+          docker compose logs -f
+          \`\`\`
+
+          默认管理员账号: admin / 你在 .env 中设置的密码
+
+          访问地址: http://你的服务器IP
+          EOF
+
+          # Create zip and tar.gz
+          zip -r coride-api-${{ github.event.inputs.version }}.zip coride-api-${{ github.event.inputs.version }}/
+          tar -czf coride-api-${{ github.event.inputs.version }}.tar.gz coride-api-${{ github.event.inputs.version }}/
+
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ github.event.inputs.version }}" \
+            --title "v${{ github.event.inputs.version }}" \
+            --generate-notes \
+            coride-api-${{ github.event.inputs.version }}.zip \
+            coride-api-${{ github.event.inputs.version }}.tar.gz

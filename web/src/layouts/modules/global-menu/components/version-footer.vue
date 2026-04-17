@@ -18,22 +18,20 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="version-footer" :class="{ inverted }">
-    <a
-      v-if="versionInfo.hasUpdate"
-      :href="versionInfo.releaseUrl"
-      target="_blank"
-      rel="noopener noreferrer"
-      class="version-link has-update"
-    >
-      <span class="current">v{{ versionInfo.currentVersion }}</span>
-      <span class="arrow">→</span>
-      <span class="latest">v{{ versionInfo.latestVersion }}</span>
-    </a>
-    <span v-else class="version-link">
+  <a
+    class="version-footer"
+    :class="{ inverted, 'has-update': versionInfo.hasUpdate }"
+    :href="versionInfo.releaseUrl"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    <template v-if="versionInfo.hasUpdate">
+      <span class="current">v{{ versionInfo.currentVersion }}（有更新）</span>
+    </template>
+    <template v-else>
       <span>v{{ versionInfo.currentVersion }}</span>
-    </span>
-  </div>
+    </template>
+  </a>
 </template>
 
 <style scoped>
@@ -43,55 +41,37 @@ onMounted(() => {
   justify-content: center;
   padding: 8px 0;
   font-size: 12px;
+  text-decoration: none;
   border-top: 1px solid rgba(128, 128, 128, 0.15);
   flex-shrink: 0;
-}
-
-.version-link {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  text-decoration: none;
   transition: color 0.2s;
 }
 
 /* Dark/inverted sidebar: light text */
-.version-footer .version-link {
+.version-footer.inverted {
   color: rgba(255, 255, 255, 0.45);
 }
 
-.version-footer .version-link:hover {
+.version-footer.inverted:hover {
   color: rgba(255, 255, 255, 0.85);
 }
 
 /* Light sidebar: dark text */
-.version-footer:not(.inverted) .version-link {
+.version-footer:not(.inverted) {
   color: rgba(0, 0, 0, 0.45);
 }
 
-.version-footer:not(.inverted) .version-link:hover {
+.version-footer:not(.inverted):hover {
   color: rgba(0, 0, 0, 0.85);
 }
 
-.version-footer .version-link.has-update {
-  color: rgba(255, 255, 255, 0.65);
-}
-
-.version-footer:not(.inverted) .version-link.has-update {
-  color: rgba(0, 0, 0, 0.65);
-}
-
-.version-footer .version-link.has-update:hover {
-  color: #18a058;
-}
-
-.latest {
-  color: #18a058;
+/* Has update: red text */
+.version-footer.has-update {
+  color: #e80c47 !important;
   font-weight: 600;
 }
 
-.arrow {
-  opacity: 0.5;
-  font-size: 10px;
+.version-footer.has-update:hover {
+  color: #c0093a !important;
 }
 </style>
