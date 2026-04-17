@@ -210,8 +210,10 @@ async function loadChannels() {
 | 性能 | 3 |
 | 逻辑Bug | 4 |
 | 缺失功能 | 3 |
-| 新增缺陷 | 4 |
-| **合计** | **34** |
+| 2026-04-15 新增 | 4 |
+| 2026-04-16 新增 | 4 |
+| 2026-04-17 新增 | 4 |
+| **合计** | **38** |
 
 ---
 
@@ -271,3 +273,54 @@ async function loadChannels() {
 **涉及文件：** `backend/src/router/admin_routes.rs:1280-1310`
 
 ---
+
+## 九、2026-04-17 新增修复
+
+### 1. Health Check 将 4xx 视为健康 ✅
+
+**问题描述：**
+- `health.rs:58` 中 `is_success() || is_client_error()` 将 401/403 等视为"健康"
+- API Key 无效的渠道不会被自动禁用
+
+**修复方案：**
+- 仅 `is_success()` 视为健康，移除 `is_client_error()` 判断
+
+**涉及文件：** `backend/src/service/health.rs:58`
+
+---
+
+### 2. update_user_key 代码冗余 ✅
+
+**问题描述：**
+- `models.rs:1353-1355` 创建了一个无 WHERE 条件的查询但从未执行
+
+**修复方案：**
+- 简化为 `let q = if let Some...` 结构，移除死代码
+
+**涉及文件：** `backend/src/db/models.rs:1353-1364`
+
+---
+
+### 3. settings 日志级别"更新成功"误导用户 ✅
+
+**问题描述：**
+- 日志级别更新后显示"成功"，但实际需重启才生效
+- 缺少类似限流配置的警告提示
+
+**修复方案：**
+- 在日志级别区域添加 `<NAlert>` 警告 "修改后需重启服务才能生效"
+
+**涉及文件：** `web/src/views/settings/index.vue:136`
+
+---
+
+### 4. home 统计卡片 total_tokens 类型不匹配 ✅
+
+**问题描述：**
+- `stats.value.total_tokens` 赋值给未声明的属性
+- TypeScript 类型检查可能报错
+
+**修复方案：**
+- 在 stats ref 定义中添加 `total_tokens: 0`
+
+**涉及文件：** `web/src/views/home/index.vue:17
