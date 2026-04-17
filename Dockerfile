@@ -43,11 +43,10 @@ COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 # Copy nginx config
 COPY nginx.conf /etc/nginx/sites-enabled/default
 
-EXPOSE 80
+# Copy startup script
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
 
-# Startup script: launch backend and nginx together
-RUN printf '#!/bin/bash\n\
-/app/coride-api &\n\
-exec nginx -g "daemon off;"\n' /app/start.sh && chmod +x /app/start.sh
+EXPOSE 80
 
 CMD ["/app/start.sh"]
