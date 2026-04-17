@@ -37,6 +37,9 @@ RUN mkdir -p /app/data /app/log /app/config
 # Copy backend binary
 COPY --from=backend-builder /app/target/release/coride-api /app/coride-api
 
+# Copy config files
+COPY --from=backend-builder /app/config /app/config
+
 # Copy frontend static files
 COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 

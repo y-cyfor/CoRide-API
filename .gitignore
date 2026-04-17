@@ -2,6 +2,7 @@
 backend/target/
 backend/.env
 backend/data/*.db
+backend/log/
 
 # Node
 web/node_modules/

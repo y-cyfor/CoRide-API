@@ -1,17 +1,21 @@
 services:
   coride-api:
     image: cyfor/coride-api:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # 如需从源码本地构建，取消下面两行注释（注释掉 image，取消 build 注释）
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: coride-api
     restart: unless-stopped
     ports:
       - "80:80"
     volumes:
+      # 数据库文件持久化
       - coride-data:/app/data
+      # 日志文件持久化
       - coride-logs:/app/log
-      - ./backend/config:/app/config:ro
+      # 如需自定义配置，取消下面一行注释并将 config.yaml 放在 ./backend/config/ 目录下
+      # - ./backend/config:/app/config:ro
     env_file:
       - .env
     environment:
