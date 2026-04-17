@@ -103,13 +103,6 @@ async function loadData() {
     }
     usageRes = uRes;
   }
-      success_count: dashRes.data.success_count || 0,
-      failure_count: dashRes.data.failure_count || 0,
-      total_tokens: usageRes.data?.total_tokens || 0,
-      p95_latency_ms: dashRes.data.p95_latency_ms || 0,
-      error_rate: dashRes.data.error_rate || '0.0%'
-    };
-  }
 
   if (usageRes.data) {
     renderTrendChart(usageRes.data.daily_trend || []);
