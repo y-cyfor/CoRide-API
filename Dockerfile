@@ -1,5 +1,5 @@
 # Stage 1: Build backend
-FROM rust:1.87-slim AS backend-builder
+FROM rust:1.88-slim AS backend-builder
 
 WORKDIR /app
 COPY backend/Cargo.toml backend/Cargo.lock ./
