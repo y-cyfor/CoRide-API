@@ -133,6 +133,7 @@ onMounted(() => {
             <NSpace justify="end">
               <NButton type="primary" size="small" @click="updateLogLevel">更新日志级别</NButton>
             </NSpace>
+            <NAlert type="warning" size="small">修改后需重启服务才能生效</NAlert>
           </NSpace>
         </NCard>
 

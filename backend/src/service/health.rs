@@ -55,7 +55,7 @@ pub async fn check_channels_health(
 
         match req_builder.send().await {
             Ok(resp) => {
-                if resp.status().is_success() || resp.status().is_client_error() {
+                if resp.status().is_success() {
                     // Channel is responsive - reset failure count
                     if failures > 0 {
                         sqlx::query(

@@ -1350,18 +1350,15 @@ pub async fn update_user_key(
     enabled_models: Option<&str>,
     status: Option<&str>,
 ) -> Result<(), sqlx::Error> {
-    let mut q = sqlx::query(
-        "UPDATE user_keys SET name = COALESCE(?, name), enabled_models = COALESCE(?, enabled_models)"
-    );
-    if let Some(s) = status {
-        q = sqlx::query(
+    let q = if let Some(s) = status {
+        sqlx::query(
             "UPDATE user_keys SET name = COALESCE(?, name), enabled_models = COALESCE(?, enabled_models), status = COALESCE(?, status) WHERE id = ? AND user_id = ?"
-        ).bind(name).bind(enabled_models).bind(s).bind(key_id).bind(user_id);
+        ).bind(name).bind(enabled_models).bind(s).bind(key_id).bind(user_id)
     } else {
-        q = sqlx::query(
+        sqlx::query(
             "UPDATE user_keys SET name = COALESCE(?, name), enabled_models = COALESCE(?, enabled_models) WHERE id = ? AND user_id = ?"
-        ).bind(name).bind(enabled_models).bind(key_id).bind(user_id);
-    }
+        ).bind(name).bind(enabled_models).bind(key_id).bind(user_id)
+    };
     q.execute(pool).await?;
     Ok(())
 }

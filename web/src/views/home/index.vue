@@ -14,6 +14,7 @@ const stats = ref({
   total_requests: 0,
   today_requests: 0,
   active_users: 0,
+  total_tokens: 0,
   p95_latency_ms: 0,
   error_rate: '0.0%'
 });

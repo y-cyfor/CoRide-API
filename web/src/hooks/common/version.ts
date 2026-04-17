@@ -29,7 +29,7 @@ export function useVersionCheck() {
     currentVersion: PACKAGE_VERSION || '0.0.0',
     latestVersion: null,
     hasUpdate: false,
-    releaseUrl: REPO_URL + '/releases',
+    releaseUrl: REPO_URL,
     loading: false
   });
 
