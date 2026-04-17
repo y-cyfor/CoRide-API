@@ -274,6 +274,76 @@ async function loadChannels() {
 
 ---
 
+## 十、2026-04-17 流程阻断性修复
+
+### 1. 用户路由使用 admin 认证中间件 ✅
+
+**问题描述：**
+- `user_routes` 使用了 `admin_auth_middleware`，该中间件检查 `role == "admin"`
+- 普通用户访问 `/user/info` 和 `/user/keys` 返回 403
+
+**修复方案：**
+- 新建 `user_auth_middleware`（只验证 JWT 和用户状态，不检查角色）
+- `user_routes` 改用 `user_auth_middleware`
+
+**涉及文件：** `backend/src/middleware/user_auth.rs`（新建）、`backend/src/main.rs`
+
+---
+
+### 2. Key 管理路由权限配置为 admin only ✅
+
+**问题描述：**
+- `/user` 和 `/user/key` 路由设置了 `roles: ['admin']`
+- 普通用户看不到 Key 管理菜单
+
+**修复方案：**
+- 移除 `roles: ['admin']` 限制
+
+**涉及文件：** `web/src/router/elegant/routes.ts`
+
+---
+
+### 3. 仪表盘页面调用 admin API ✅
+
+**问题描述：**
+- `home/index.vue` 调用 `/admin/stats/dashboard`、`/admin/stats/usage` 等
+- 普通用户返回 403
+
+**修复方案：**
+- 前端检测用户角色，admin 用 admin API，user 用 `/user/stats/dashboard`
+- 后端新增 `/user/stats/dashboard` 接口，按用户 API Key 过滤数据
+
+**涉及文件：** `backend/src/router/admin_routes.rs`、`web/src/views/home/index.vue`
+
+---
+
+### 4. 数据统计/日志页面调用 admin API ✅
+
+**问题描述：**
+- `data/stats/index.vue` 和 `data/log/index.vue` 调用 admin 接口
+- 普通用户返回 403
+
+**修复方案：**
+- 后端新增 `/user/stats/usage` 和 `/user/logs` 接口
+- 前端根据角色调用对应 API
+
+**涉及文件：** `backend/src/router/admin_routes.rs`、`web/src/views/data/stats/index.vue`、`web/src/views/data/log/index.vue`
+
+---
+
+### 5. 后端缺少普通用户专用 API ✅
+
+**问题描述：**
+- 所有统计和日志 API 都在 `admin_protected` 路由组下
+
+**修复方案：**
+- 新增 `/user/stats/dashboard`、`/user/stats/usage`、`/user/logs` 三个接口
+- 通过 JWT 中的 user_id 查找用户 API Key，只返回该用户的数据
+
+**涉及文件：** `backend/src/router/admin_routes.rs`
+
+---
+
 ## 九、2026-04-17 新增修复
 
 ### 1. Health Check 将 4xx 视为健康 ✅
