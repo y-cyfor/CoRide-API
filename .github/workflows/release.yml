@@ -1,12 +1,9 @@
 name: Create Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: '版本号 (如 0.1.0)'
-        required: true
-        type: string
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
@@ -18,17 +15,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
       - name: Create deploy package
         run: |
-          mkdir -p coride-api-${{ github.event.inputs.version }}
-          cp docker-compose.yml coride-api-${{ github.event.inputs.version }}/
-          cp .env.example coride-api-${{ github.event.inputs.version }}/
-          cp backend/config/config.yaml coride-api-${{ github.event.inputs.version }}/config.yaml
-          cp README.md coride-api-${{ github.event.inputs.version }}/
-          cp LICENSE coride-api-${{ github.event.inputs.version }}/
+          mkdir -p coride-api-${{ steps.version.outputs.VERSION }}
+          cp docker-compose.yml coride-api-${{ steps.version.outputs.VERSION }}/
+          cp .env.example coride-api-${{ steps.version.outputs.VERSION }}/
+          cp backend/config/config.yaml coride-api-${{ steps.version.outputs.VERSION }}/config.yaml
+          cp README.md coride-api-${{ steps.version.outputs.VERSION }}/
+          cp LICENSE coride-api-${{ steps.version.outputs.VERSION }}/
 
-          # Add docker-compose image-only variant
-          cat > coride-api-${{ github.event.inputs.version }}/docker-compose.yml << 'EOF'
+          # Replace docker-compose.yml with image-only version
+          cat > coride-api-${{ steps.version.outputs.VERSION }}/docker-compose.yml << 'EOF'
           services:
             coride-api:
               image: cyfor/coride-api:latest
@@ -45,7 +46,7 @@ jobs:
                 - CORIDE_DB_PATH=/app/data/coride.db
           EOF
 
-          cat > coride-api-${{ github.event.inputs.version }}/.env.example << 'EOF'
+          cat > coride-api-${{ steps.version.outputs.VERSION }}/.env.example << 'EOF'
           # 管理员账号
           CORIDE_ADMIN_USERNAME=admin
           CORIDE_ADMIN_PASSWORD=修改为你的密码
@@ -57,9 +58,8 @@ jobs:
           CORIDE_LOG_LEVEL=info
           EOF
 
-          # Create README for the package
-          cat > coride-api-${{ github.event.inputs.version }}/README.md << EOF
-          # CoRide-API v${{ github.event.inputs.version }}
+          cat > coride-api-${{ steps.version.outputs.VERSION }}/README.md << EOF
+          # CoRide-API v${{ steps.version.outputs.VERSION }}
 
           ## 快速部署
 
@@ -80,16 +80,15 @@ jobs:
           访问地址: http://你的服务器IP
           EOF
 
-          # Create zip and tar.gz
-          zip -r coride-api-${{ github.event.inputs.version }}.zip coride-api-${{ github.event.inputs.version }}/
-          tar -czf coride-api-${{ github.event.inputs.version }}.tar.gz coride-api-${{ github.event.inputs.version }}/
+          zip -r coride-api-${{ steps.version.outputs.VERSION }}.zip coride-api-${{ steps.version.outputs.VERSION }}/
+          tar -czf coride-api-${{ steps.version.outputs.VERSION }}.tar.gz coride-api-${{ steps.version.outputs.VERSION }}/
 
       - name: Create Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v${{ github.event.inputs.version }}" \
-            --title "v${{ github.event.inputs.version }}" \
+          gh release create "v${{ steps.version.outputs.VERSION }}" \
+            --title "v${{ steps.version.outputs.VERSION }}" \
             --generate-notes \
-            coride-api-${{ github.event.inputs.version }}.zip \
-            coride-api-${{ github.event.inputs.version }}.tar.gz
+            coride-api-${{ steps.version.outputs.VERSION }}.zip \
+            coride-api-${{ steps.version.outputs.VERSION }}.tar.gz
