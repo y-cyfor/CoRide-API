@@ -2,7 +2,18 @@
 
 > A lightweight AI API proxy service — multi-model carpooling
 
-[中文文档](README.md) | [![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE) | [![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org/) | [![Vue](https://img.shields.io/badge/vue-3-green.svg)](https://vuejs.org/) | [![Docker](https://img.shields.io/badge/Docker-cyfor%2Fcoride--api-blue)](https://hub.docker.com/r/cyfor/coride-api)
+<div align="center">
+
+[中文文档](README.md)
+
+[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org/)
+[![Vue](https://img.shields.io/badge/vue-3-green.svg)](https://vuejs.org/)
+[![Docker](https://img.shields.io/badge/Docker-cyfor%2Fcoride--api-blue)](https://hub.docker.com/r/cyfor/coride-api)
+
+</div>
+
+> This document is translated from the Chinese version. For the original, refer to [中文文档](README.md).
 
 ---
 
