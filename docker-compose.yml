@@ -8,6 +8,8 @@ services:
     container_name: coride-api
     restart: unless-stopped
     ports:
+      # 格式: "宿主机端口:容器端口"，容器内 nginx 监听 80 端口
+      # 修改第一个数字可更换外部访问端口，如 "8080:80" 则通过 http://IP:8080 访问
       - "80:80"
     volumes:
       # 数据库文件持久化
