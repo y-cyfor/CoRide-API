@@ -2,10 +2,7 @@
 
 > 一个轻量级 AI API 代理服务 —— 多模型拼车中转
 
-[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org/)
-[![Vue](https://img.shields.io/badge/vue-3-green.svg)](https://vuejs.org/)
-[![Docker](https://img.shields.io/badge/Docker-cyfor%2Fcoride--api-blue)](https://hub.docker.com/r/cyfor/coride-api)
+[English](README-en.md) | [![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE) | [![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org/) | [![Vue](https://img.shields.io/badge/vue-3-green.svg)](https://vuejs.org/) | [![Docker](https://img.shields.io/badge/Docker-cyfor%2Fcoride--api-blue)](https://hub.docker.com/r/cyfor/coride-api)
 
 ---
 
@@ -13,16 +10,25 @@
 
 CoRide-API 是一个基于 Rust + Vue 3 构建的轻量级 AI API 代理管理工具。它允许多个用户共享一组上游 AI 服务渠道（如 OpenAI、Anthropic、阿里云通义千问、智谱 AI、Kimi 等），通过统一的 OpenAI / anthropics 兼容接口对外提供服务。
 
+CoRide-API is a lightweight AI API proxy management tool built with Rust + Vue 3. It allows multiple users to share a set of upstream AI service channels (such as OpenAI, Anthropic, Alibaba Cloud Tongyi Qianwen, Zhipu AI, Kimi, etc.) through a unified OpenAI-compatible interface.
+
 **核心业务场景：**
 
 - 管理员集中管理多个 AI 服务渠道的 API Key 和配置
+  Administrators centrally manage API Keys and configurations of multiple AI service channels
 - 多个用户通过各自的 API Key 接入代理服务
+  Multiple users access the proxy service through their individual API Keys
 - 按用户进行配额限制（请求数 / Token 数）和速率控制
+  Per-user quota limits (requests / tokens) and rate control
 - 支持按用户绑定可用模型，实现精细化的权限管理
+  Model binding per user for fine-grained access control
 - 分时段、按比例将请求分流到不同的应用预设（伪装 UA 和请求头）
+  Time-based, weighted request routing to different app presets (UA + header spoofing)
 - 全量请求日志记录与统计分析，方便运维监控
+  Full request logging and statistics for operational monitoring
 
 **项目定位：** 纯无商业化功能的个人/小团队拼车工具，专注于简洁、高效、易部署。
+**Positioning:** A personal/small-team carpooling tool with no commercial features, focused on simplicity, efficiency, and easy deployment.
 
 ---
 
