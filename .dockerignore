@@ -18,7 +18,6 @@ Dockerfile.backend
 Dockerfile.frontend
 docker-compose.yml
 .dockerignore
-nginx.conf
 
 # Docs / Vibe
 vibe
