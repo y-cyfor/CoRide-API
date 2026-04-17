@@ -26,10 +26,11 @@ onMounted(() => {
     rel="noopener noreferrer"
   >
     <template v-if="versionInfo.hasUpdate">
-      <span class="current">v{{ versionInfo.currentVersion }}（有更新）</span>
+      <span class="current">当前版本：v{{ versionInfo.currentVersion }}（有更新）</span>
+      <span class="latest">最新版本：v{{ versionInfo.latestVersion }}</span>
     </template>
     <template v-else>
-      <span>v{{ versionInfo.currentVersion }}</span>
+      <span>当前版本：v{{ versionInfo.currentVersion }}</span>
     </template>
   </a>
 </template>
@@ -37,6 +38,7 @@ onMounted(() => {
 <style scoped>
 .version-footer {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 8px 0;
@@ -45,6 +47,7 @@ onMounted(() => {
   border-top: 1px solid rgba(128, 128, 128, 0.15);
   flex-shrink: 0;
   transition: color 0.2s;
+  line-height: 1.6;
 }
 
 /* Dark/inverted sidebar: light text */
@@ -73,5 +76,10 @@ onMounted(() => {
 
 .version-footer.has-update:hover {
   color: #c0093a !important;
+}
+
+.latest {
+  font-size: 11px;
+  opacity: 0.85;
 }
 </style>
