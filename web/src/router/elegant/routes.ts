@@ -229,7 +229,7 @@ export const generatedRoutes: GeneratedRoute[] = [
     meta: {
       title: 'user',
       i18nKey: 'route.user',
-      order: 2,
+      order: 2
     },
     children: [
       {
@@ -238,7 +238,7 @@ export const generatedRoutes: GeneratedRoute[] = [
         component: 'view.user_key',
         meta: {
           title: 'user_key',
-          i18nKey: 'route.user_key',
+          i18nKey: 'route.user_key'
         }
       }
     ]
