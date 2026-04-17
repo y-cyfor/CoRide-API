@@ -18,9 +18,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+# Create data and log directories
+RUN mkdir -p /app/data /app/log
+
 COPY --from=builder /app/target/release/coride-api /app/coride-api
 COPY --from=builder /app/config /app/config
 
 EXPOSE 8000
 
-CMD ["/app/liteproxy"]
+CMD ["/app/coride-api"]

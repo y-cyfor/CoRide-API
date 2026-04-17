@@ -75,7 +75,7 @@ pnpm dev
 # 后端构建
 cd backend
 cargo build --release
-./target/release/liteproxy
+./target/release/coride-api
 
 # 前端构建
 cd web
@@ -86,6 +86,8 @@ pnpm build
 
 ### 方法三：Docker 部署（推荐）
 
+**方式 A：本地构建镜像**
+
 ```bash
 # 在项目根目录执行
 docker compose up -d
@@ -94,6 +96,24 @@ docker compose up -d
 # 前端: http://localhost:80
 # 后端: http://localhost:8000
 ```
+
+**方式 B：从 Docker Hub 拉取镜像**
+
+```bash
+# 1. 准备 .env 文件
+cp .env.example .env
+# 编辑 .env 设置管理员密码和 JWT Secret
+
+# 2. 注释掉 docker-compose.yml 中的 build 段（或直接使用 image 模式）
+# 将 backend/ frontend 服务的 build: 部分注释掉
+
+# 3. 启动
+docker compose up -d
+```
+
+> 首次启动时通过 `CORIDE_ADMIN_USERNAME` / `CORIDE_ADMIN_PASSWORD` 环境变量设置管理员账号，
+> 通过 `CORIDE_JWT_SECRET` 设置 JWT 签名密钥（务必使用随机字符串）。
+> 详细环境变量说明见 `.env.example`。
 
 ### 默认管理员账号
 

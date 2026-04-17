@@ -1,0 +1,30 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+
+# Node
+web/node_modules
+web/dist
+
+# Rust
+backend/target
+
+# Docker
+Dockerfile.backend
+Dockerfile.frontend
+docker-compose.yml
+.dockerignore
+nginx.conf
+
+# Docs / Vibe
+vibe
+*.md
+LICENSE
+
+# OS
+.DS_Store
+Thumbs.db

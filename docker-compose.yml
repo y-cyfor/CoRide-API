@@ -1,7 +1,6 @@
-version: '3.8'
-
 services:
   backend:
+    image: ycyfor/coride-api-backend:latest
     build:
       context: .
       dockerfile: Dockerfile.backend
@@ -11,11 +10,16 @@ services:
       - "8000:8000"
     volumes:
       - coride-data:/app/data
-      - ./config:/app/config:ro
+      - coride-logs:/app/log
+      - ./backend/config:/app/config:ro
+    env_file:
+      - .env
     environment:
-      - RUST_LOG=info
+      - CORIDE_DB_PATH=/app/data/coride.db
+      - CORIDE_LOG_LEVEL=info
 
   frontend:
+    image: ycyfor/coride-api-frontend:latest
     build:
       context: .
       dockerfile: Dockerfile.frontend
@@ -28,3 +32,4 @@ services:
 
 volumes:
   coride-data:
+  coride-logs:

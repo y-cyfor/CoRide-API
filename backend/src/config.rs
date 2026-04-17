@@ -60,13 +60,13 @@ pub struct GlobalRateLimitConfig {
 
 /// Load configuration from `config/config.yaml` with environment variable overrides.
 ///
-/// Environment variables (all prefixed with `LP_`):
-/// - `LP_PORT`          -- server port
-/// - `LP_DB_PATH`       -- database file path
-/// - `LP_ADMIN_USERNAME`-- admin username
-/// - `LP_ADMIN_PASSWORD`-- admin password
-/// - `LP_JWT_SECRET`    -- JWT signing secret
-/// - `LP_LOG_LEVEL`     -- log level (trace/debug/info/warn/error)
+/// Environment variables (all prefixed with `CORIDE_` or legacy `LP_`):
+/// - `CORIDE_PORT` / `LP_PORT`          -- server port
+/// - `CORIDE_DB_PATH` / `LP_DB_PATH`    -- database file path
+/// - `CORIDE_ADMIN_USERNAME` / `LP_ADMIN_USERNAME` -- admin username
+/// - `CORIDE_ADMIN_PASSWORD` / `LP_ADMIN_PASSWORD` -- admin password
+/// - `CORIDE_JWT_SECRET` / `LP_JWT_SECRET`    -- JWT signing secret
+/// - `CORIDE_LOG_LEVEL` / `LP_LOG_LEVEL`     -- log level
 pub async fn load() -> AppConfig {
     dotenvy::dotenv().ok();
 
@@ -78,23 +78,28 @@ pub async fn load() -> AppConfig {
     let mut config: AppConfig =
         serde_yaml::from_str(&raw).unwrap_or_else(|e| panic!("Failed to parse config YAML: {e}"));
 
-    // Environment variable overrides
-    if let Ok(port) = env::var("LP_PORT") {
-        config.server.port = port.parse().expect("LP_PORT must be a valid u16");
+    // Helper: prefer CORIDE_ prefix, fall back to LP_ prefix
+    let env = |coride_key: &str, lp_key: &str| -> Option<String> {
+        env::var(coride_key).ok().or_else(|| env::var(lp_key).ok())
+    };
+
+    // Environment variable override
+    if let Some(port) = env("CORIDE_PORT", "LP_PORT") {
+        config.server.port = port.parse().expect("CORIDE_PORT must be a valid u16");
     }
-    if let Ok(db_path) = env::var("LP_DB_PATH") {
+    if let Some(db_path) = env("CORIDE_DB_PATH", "LP_DB_PATH") {
         config.database.path = db_path;
     }
-    if let Ok(username) = env::var("LP_ADMIN_USERNAME") {
+    if let Some(username) = env("CORIDE_ADMIN_USERNAME", "LP_ADMIN_USERNAME") {
         config.admin.username = username;
     }
-    if let Ok(password) = env::var("LP_ADMIN_PASSWORD") {
+    if let Some(password) = env("CORIDE_ADMIN_PASSWORD", "LP_ADMIN_PASSWORD") {
         config.admin.password = password;
     }
-    if let Ok(secret) = env::var("LP_JWT_SECRET") {
+    if let Some(secret) = env("CORIDE_JWT_SECRET", "LP_JWT_SECRET") {
         config.jwt.secret = secret;
     }
-    if let Ok(level) = env::var("LP_LOG_LEVEL") {
+    if let Some(level) = env("CORIDE_LOG_LEVEL", "LP_LOG_LEVEL") {
         config.log.level = level;
     }
 

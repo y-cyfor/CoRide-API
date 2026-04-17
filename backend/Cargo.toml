@@ -14,6 +14,7 @@ serde_yaml = "0.9"
 governor = "0.6"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
 bcrypt = "0.16"
 jsonwebtoken = "9"
 tokio = { version = "1", features = ["full"] }

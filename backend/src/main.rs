@@ -7,6 +7,8 @@ use axum::{
     Json, Router,
 };
 use tower_http::cors::{Any, CorsLayer};
+use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
 use coride_api::config;
@@ -21,14 +23,25 @@ async fn main() {
     // 1. Load configuration
     let cfg = config::load().await;
 
-    // 2. Initialize logging
+    // 2. Initialize logging (stdout + daily rotating file)
     let log_level = cfg.log.level.clone();
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new(format!("coride_api={log_level}")));
 
-    tracing_subscriber::fmt()
-        .with_env_filter(env_filter)
-        .with_target(false)
+    // Create log directory
+    std::fs::create_dir_all("log").ok();
+
+    let file_appender = RollingFileAppender::new(Rotation::DAILY, "log", "coride-api.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(tracing_subscriber::fmt::Layer::default().with_target(false))
+        .with(
+            tracing_subscriber::fmt::Layer::default()
+                .with_target(false)
+                .with_writer(non_blocking),
+        )
         .init();
 
     tracing::info!(port = cfg.server.port, "Starting CoRide-API");
