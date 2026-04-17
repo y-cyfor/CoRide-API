@@ -14,7 +14,7 @@ const editingId = ref<number | null>(null);
 const showModal = ref(false);
 const formModel = ref({
   name: '',
-  enabled_models: ''
+  enabled_models: [] as string[]
 });
 
 const modelOptions = ref<{ label: string; value: string }[]>([]);
@@ -67,7 +67,7 @@ async function loadData() {
 function handleCreate() {
   isEdit.value = false;
   editingId.value = null;
-  formModel.value = { name: '', enabled_models: '' };
+  formModel.value = { name: '', enabled_models: [] };
   showModal.value = true;
 }
 
@@ -76,23 +76,27 @@ function handleEdit(row: Api.UserKey.UserKey) {
   editingId.value = row.id;
   formModel.value = {
     name: row.name || '',
-    enabled_models: row.enabled_models || ''
+    enabled_models: row.enabled_models ? JSON.parse(row.enabled_models) : []
   };
   showModal.value = true;
 }
 
 async function handleSave() {
+  const enabledModels = formModel.value.enabled_models.length > 0
+    ? JSON.stringify(formModel.value.enabled_models)
+    : undefined;
+
   let error: any;
   if (isEdit.value && editingId.value) {
     const res = await fetchUpdateUserKey(editingId.value, {
       name: formModel.value.name || undefined,
-      enabled_models: formModel.value.enabled_models || undefined
+      enabled_models: enabledModels
     });
     error = res.error;
   } else {
     const res = await fetchCreateUserKey({
       name: formModel.value.name || undefined,
-      enabled_models: formModel.value.enabled_models || undefined
+      enabled_models: enabledModels
     });
     error = res.error;
   }
