@@ -131,12 +131,14 @@ CoRide-API/
 │   │   ├── state/app_state.rs       # 应用状态构建
 │   │   ├── db/
 │   │   │   ├── mod.rs               # 连接池初始化 + 迁移执行
-│   │   │   ├── migrations/          # SQL 迁移文件（10 个）
+│   │   │   ├── migrations/          # SQL 迁移文件（12 个）
 │   │   │   └── models.rs            # 所有结构体 + CRUD 函数
 │   │   ├── middleware/
 │   │   │   ├── auth.rs              # 用户 API Key 认证 + 模型权限检查
 │   │   │   ├── admin_auth.rs        # 管理员 JWT 认证 + 角色检查
-│   │   │   └── rate_limit.rs        # 全局 QPS/并发限制
+│   │   │   ├── user_auth.rs         # 用户 JWT 认证（无需 admin 角色）
+│   │   │   ├── rate_limit.rs        # 全局 QPS/并发限制
+│   │   │   └── ip_filter.rs         # IP 访问控制（全局黑名单 + 用户白名单）
 │   │   ├── router/
 │   │   │   ├── proxy_routes.rs      # 代理请求处理 + 用户自助查询
 │   │   │   └── admin_routes.rs      # 管理后台 CRUD + 统计 + 用户端路由
@@ -160,16 +162,16 @@ CoRide-API/
 │       │   │   ├── app-profile/     #   应用预设（admin）
 │       │   │   └── traffic-plan/    #   应用方案（admin）
 │       │   ├── upstream/            # 上游模型
-│       │   │   ├── channel/         #   渠道管理（admin）
+│       │   │   ├── channel/         #   渠道管理（admin，含用量统计）
 │       │   │   └── model/           #   模型管理（admin）
 │       │   ├── control/             # 流量控制
-│       │   │   ├── quota/           #   配额管理（admin）
+│       │   │   ├── quota/           #   配额管理（admin，支持渠道级）
 │       │   │   ├── ratelimit/       #   限流管理（admin）
-│       │   │   └── user/            #   用户管理（admin）
+│       │   │   └── user/            #   用户管理（admin，含 IP 白名单）
 │       │   ├── data/                # 数据统计
 │       │   │   ├── log/             #   请求日志（全员，user 仅看自己）
 │       │   │   └── stats/           #   使用统计（全员，user 仅看自己）
-│       │   └── settings/            # 系统设置（admin）
+│       │   └── settings/            # 系统设置（admin，含 IP 黑名单）
 │       ├── service/api/             # API 请求封装
 │       ├── typings/api/             # TypeScript 类型定义
 │       ├── router/elegant/          # 自动生成的路由

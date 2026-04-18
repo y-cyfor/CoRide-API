@@ -122,13 +122,14 @@ CoRide-API/
 │   │   ├── state/app_state.rs       # App state builder
 │   │   ├── db/
 │   │   │   ├── mod.rs               # Connection pool + migrations
-│   │   │   ├── migrations/          # SQL migrations (10 files)
+│   │   │   ├── migrations/          # SQL migrations (12 files)
 │   │   │   └── models.rs            # All structs + CRUD functions
 │   │   ├── middleware/
 │   │   │   ├── auth.rs              # User API Key auth + model permission
 │   │   │   ├── admin_auth.rs        # Admin JWT auth + role check
 │   │   │   ├── user_auth.rs         # User JWT auth (no admin role required)
-│   │   │   └── rate_limit.rs        # Global QPS/concurrency limits
+│   │   │   ├── rate_limit.rs        # Global QPS/concurrency limits
+│   │   │   └── ip_filter.rs         # IP access control (global blacklist + user whitelist)
 │   │   ├── router/
 │   │   │   ├── proxy_routes.rs      # Proxy requests + user self-query
 │   │   │   └── admin_routes.rs      # Admin CRUD + stats + user endpoints
@@ -152,16 +153,16 @@ CoRide-API/
 │       │   │   ├── app-profile/     #   App Presets (admin)
 │       │   │   └── traffic-plan/    #   Traffic Plans (admin)
 │       │   ├── upstream/            # Upstream Models
-│       │   │   ├── channel/         #   Channel Management (admin)
+│       │   │   ├── channel/         #   Channel Management (admin, with usage stats)
 │       │   │   └── model/           #   Model Management (admin)
 │       │   ├── control/             # Traffic Control
-│       │   │   ├── quota/           #   Quota Management (admin)
+│       │   │   ├── quota/           #   Quota Management (admin, channel-level support)
 │       │   │   ├── ratelimit/       #   Rate Limit Management (admin)
-│       │   │   └── user/            #   User Management (admin)
+│       │   │   └── user/            #   User Management (admin, with IP whitelist)
 │       │   ├── data/                # Data Statistics
 │       │   │   ├── log/             #   Request Logs (all, user sees own)
 │       │   │   └── stats/           #   Usage Stats (all, user sees own)
-│       │   └── settings/            # System Settings (admin)
+│       │   └── settings/            # System Settings (admin, with IP blacklist)
 │       ├── service/api/             # API request wrappers
 │       ├── typings/api/             # TypeScript type definitions
 │       ├── router/elegant/          # Auto-generated routes
