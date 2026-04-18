@@ -340,10 +340,50 @@ pub async fn list_channels(
     };
 
     match models::list_channels(pool, page, page_size).await {
-        Ok(channels) => ok_response(serde_json::json!({
-            "items": channels,
-            "total": total,
-        })),
+        Ok(channels) => {
+            // Fetch all channel stats in a single GROUP BY query
+            let stats_map: std::collections::HashMap<i64, (i64, i64, i64, i64)> = sqlx::query_as(
+                "SELECT channel_id,
+                        COUNT(*) as total_requests,
+                        COALESCE(SUM(total_tokens), 0) as total_tokens,
+                        SUM(CASE WHEN created_at >= datetime('now', 'start of day') THEN 1 ELSE 0 END) as today_requests,
+                        COALESCE(SUM(CASE WHEN created_at >= datetime('now', 'start of day') THEN total_tokens ELSE 0 END), 0) as today_tokens
+                 FROM request_logs
+                 GROUP BY channel_id"
+            )
+            .fetch_all(pool)
+            .await
+            .ok()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(cid, tr, tt, dr, dt)| (cid, (tr, tt, dr, dt)))
+            .collect();
+
+            let mut items = Vec::new();
+            for ch in channels {
+                let ch_json = match serde_json::to_value(&ch) {
+                    Ok(v) => v,
+                    Err(e) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+                };
+                let channel_id = ch_json.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+
+                let (total_requests, total_tokens, today_requests, today_tokens) =
+                    stats_map.get(&channel_id).copied().unwrap_or((0, 0, 0, 0));
+
+                let mut enriched = ch_json.as_object().cloned().unwrap_or_default();
+                enriched.insert("stats".to_string(), serde_json::json!({
+                    "total_requests": total_requests,
+                    "total_tokens": total_tokens,
+                    "today_requests": today_requests,
+                    "today_tokens": today_tokens,
+                }));
+                items.push(serde_json::Value::Object(enriched));
+            }
+            ok_response(serde_json::json!({
+                "items": items,
+                "total": total,
+            }))
+        }
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
     }
 }
