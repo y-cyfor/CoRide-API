@@ -13,52 +13,60 @@ pub enum QuotaError {
     DbError(#[from] sqlx::Error),
 }
 
-/// Check if a user has remaining quota before making a request.
-/// `tokens` is the estimated token count for the request.
-pub async fn check_user_quota(pool: &SqlitePool, user_id: i64, tokens: i32) -> Result<(), QuotaError> {
-    let quotas = models::get_active_quotas(pool, user_id).await?;
+/// Check if a user has remaining quota for a specific channel.
+/// Checks channel-level quota first, falls back to user-level quota.
+pub async fn check_user_quota(
+    pool: &SqlitePool,
+    user_id: i64,
+    channel_id: i64,
+    tokens: i32,
+) -> Result<(), QuotaError> {
+    let quota = match models::get_user_quota_for_channel(pool, user_id, channel_id).await? {
+        Some(q) => q,
+        None => return Ok(()), // No quota restriction = allowed
+    };
 
-    if quotas.is_empty() {
-        // No quota restriction = allowed
-        return Ok(());
-    }
+    // Reset used if cycle expired
+    reset_quota_if_expired(pool, &quota).await?;
 
-    for quota in &quotas {
-        // Reset used if cycle expired
-        reset_quota_if_expired(pool, quota).await?;
-
-        match quota.quota_type.as_str() {
-            "requests" => {
-                if quota.used >= quota.total_limit {
-                    return Err(QuotaError::Exceeded(format!("{} requests", quota.total_limit)));
-                }
+    match quota.quota_type.as_str() {
+        "requests" => {
+            if quota.used >= quota.total_limit {
+                return Err(QuotaError::Exceeded(format!("{} requests", quota.total_limit)));
             }
-            "tokens" => {
-                if quota.used + (tokens as i64) > quota.total_limit {
-                    return Err(QuotaError::Exceeded(format!("{} tokens", quota.total_limit)));
-                }
-            }
-            _ => {}
         }
+        "tokens" => {
+            if quota.used + (tokens as i64) > quota.total_limit {
+                return Err(QuotaError::Exceeded(format!("{} tokens", quota.total_limit)));
+            }
+        }
+        _ => {}
     }
 
     Ok(())
 }
 
-/// Deduct user quota after a successful request.
-pub async fn deduct_user_quota(pool: &SqlitePool, user_id: i64, tokens: i32) -> Result<(), QuotaError> {
-    let quotas = models::get_active_quotas(pool, user_id).await?;
+/// Deduct user quota for a specific channel after a successful request.
+/// Only deducts from the applicable quota (channel-level or user-level).
+pub async fn deduct_user_quota(
+    pool: &SqlitePool,
+    user_id: i64,
+    channel_id: i64,
+    tokens: i32,
+) -> Result<(), QuotaError> {
+    let quota = match models::get_user_quota_for_channel(pool, user_id, channel_id).await? {
+        Some(q) => q,
+        None => return Ok(()), // No quota to deduct from
+    };
 
-    for quota in &quotas {
-        match quota.quota_type.as_str() {
-            "requests" => {
-                models::increment_quota_used(pool, quota.id, 1).await?;
-            }
-            "tokens" => {
-                models::increment_quota_used(pool, quota.id, tokens as i64).await?;
-            }
-            _ => {}
+    match quota.quota_type.as_str() {
+        "requests" => {
+            models::increment_quota_used(pool, quota.id, 1).await?;
         }
+        "tokens" => {
+            models::increment_quota_used(pool, quota.id, tokens as i64).await?;
+        }
+        _ => {}
     }
 
     Ok(())

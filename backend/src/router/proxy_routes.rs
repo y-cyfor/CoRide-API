@@ -176,7 +176,7 @@ async fn handle_proxy(
 
             // Check user quota AFTER channel quota
             let estimated_tokens = crate::utils::token_counter::estimate_tokens(&body_str) as i32;
-            if let Err(e) = quota::check_user_quota(pool, user_id, estimated_tokens).await {
+            if let Err(e) = quota::check_user_quota(pool, user_id, channel.id, estimated_tokens).await {
                 return error_response(StatusCode::PAYMENT_REQUIRED, &e.to_string());
             }
 
@@ -203,7 +203,7 @@ async fn handle_proxy(
                 {
                     Ok(resp) => {
                         // Deduct quota (estimate only for streaming, actual tokens unknown until stream ends)
-                        let _ = quota::deduct_user_quota(pool, user_id, estimated_tokens).await;
+                        let _ = quota::deduct_user_quota(pool, user_id, channel.id, estimated_tokens).await;
                         let _ = quota::deduct_channel_quota(pool, channel.id, estimated_tokens).await;
 
                         // Log request with streaming marker
@@ -253,7 +253,7 @@ async fn handle_proxy(
                         if result.status_code < 500 || result.status_code == 400 || result.status_code == 401 || result.status_code == 403 {
                             // Deduct quota on success
                             if (200..300).contains(&result.status_code) {
-                                let _ = quota::deduct_user_quota(pool, user_id, result.total_tokens).await;
+                                let _ = quota::deduct_user_quota(pool, user_id, channel.id, result.total_tokens).await;
                                 let _ = quota::deduct_channel_quota(pool, channel.id, result.total_tokens).await;
                             }
 

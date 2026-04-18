@@ -89,6 +89,8 @@ pub struct Quota {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub period_end: Option<chrono::DateTime<chrono::Utc>>,
     pub enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<i64>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -646,6 +648,36 @@ pub async fn reset_quota_if_cycle_expired(pool: &SqlitePool, quota_id: i64) -> R
 }
 
 // === Channel Quota ===
+
+/// Get active quota for a user on a specific channel.
+/// Returns the channel-level quota if exists, otherwise falls back to user-level (channel_id IS NULL).
+/// Returns None if no quota restriction applies.
+pub async fn get_user_quota_for_channel(
+    pool: &SqlitePool,
+    user_id: i64,
+    channel_id: i64,
+) -> Result<Option<Quota>, sqlx::Error> {
+    // Try channel-level quota first
+    let channel_quota: Option<Quota> = sqlx::query_as(
+        "SELECT * FROM quotas WHERE user_id = ? AND channel_id = ? AND enabled = 1 ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(user_id)
+    .bind(channel_id)
+    .fetch_optional(pool)
+    .await?;
+
+    if channel_quota.is_some() {
+        return Ok(channel_quota);
+    }
+
+    // Fallback to user-level quota (channel_id IS NULL)
+    sqlx::query_as(
+        "SELECT * FROM quotas WHERE user_id = ? AND channel_id IS NULL AND enabled = 1 ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
 
 pub async fn check_channel_quota(
     pool: &SqlitePool,
