@@ -111,11 +111,18 @@ async function loadBlacklist() {
 }
 
 async function handleAddBlacklist() {
-  if (!newIp.value.trim()) {
+  const ip = newIp.value.trim();
+  if (!ip) {
     message.warning('请输入 IP 地址');
     return;
   }
-  const { error } = await fetchAddBlacklist({ ip_address: newIp.value.trim() });
+  // Basic IP/CIDR validation
+  const ipPattern = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$|^([0-9a-fA-F:]+)(\/\d{1,3})?$/;
+  if (!ipPattern.test(ip)) {
+    message.warning('IP 格式不正确，请输入 IPv4/IPv6 地址或 CIDR 网段');
+    return;
+  }
+  const { error } = await fetchAddBlacklist({ ip_address: ip });
   if (!error) {
     message.success('IP 已加入黑名单');
     newIp.value = '';

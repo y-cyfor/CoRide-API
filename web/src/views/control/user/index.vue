@@ -88,13 +88,20 @@ async function loadWhitelist(userId: number) {
 }
 
 async function handleAddWhitelist() {
-  if (!newWhitelistIp.value.trim() || !whitelistUserId.value) {
+  const ip = newWhitelistIp.value.trim();
+  if (!ip || !whitelistUserId.value) {
     message.warning('请输入 IP 地址');
+    return;
+  }
+  // Basic IP/CIDR validation
+  const ipPattern = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$|^([0-9a-fA-F:]+)(\/\d{1,3})?$/;
+  if (!ipPattern.test(ip)) {
+    message.warning('IP 格式不正确，请输入 IPv4/IPv6 地址或 CIDR 网段');
     return;
   }
   const { error } = await fetchAddWhitelist({
     user_id: whitelistUserId.value,
-    ip_address: newWhitelistIp.value.trim()
+    ip_address: ip
   });
   if (!error) {
     message.success('IP 已加入白名单');

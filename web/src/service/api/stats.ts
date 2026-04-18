@@ -21,6 +21,7 @@ export function fetchUsageStats(params?: {
     top_users: Array<{ api_key: string; count: number }>;
     total_tokens: number;
     token_daily: Array<{ day: string; prompt_tokens: number; completion_tokens: number }>;
+    model_usage: Array<{ name: string; count: number }>;
   }>({
     url: '/admin/stats/usage',
     method: 'get',

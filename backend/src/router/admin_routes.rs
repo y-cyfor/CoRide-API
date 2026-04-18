@@ -183,6 +183,27 @@ fn error_response(status: StatusCode, message: &str) -> Response {
     })).into_response()
 }
 
+/// Validate IP address format: IPv4, IPv6, or CIDR notation.
+fn is_valid_ip_or_cidr(s: &str) -> bool {
+    if s.is_empty() || s.len() > 128 {
+        return false;
+    }
+
+    // CIDR notation
+    if let Some((ip, prefix)) = s.split_once('/') {
+        let prefix: u8 = match prefix.parse() {
+            Ok(p) => p,
+            Err(_) => return false,
+        };
+        if prefix > 128 {
+            return false;
+        }
+        return ip.parse::<std::net::IpAddr>().is_ok();
+    }
+
+    s.parse::<std::net::IpAddr>().is_ok()
+}
+
 // === Auth endpoints ===
 
 pub async fn login(
@@ -1622,13 +1643,22 @@ pub async fn add_blacklist(
     State(state): State<Arc<AppState>>,
     Json(req): Json<AddBlacklistRequest>,
 ) -> Response {
+    // Validate IP format (IPv4, IPv6, or CIDR)
+    let ip = req.ip_address.trim();
+    if !is_valid_ip_or_cidr(ip) {
+        return error_response(StatusCode::BAD_REQUEST, "Invalid IP address format. Expected IPv4, IPv6, or CIDR (e.g., 192.168.1.1, ::1, 192.168.1.0/24)");
+    }
+
     let pool = &state.db;
     match sqlx::query("INSERT INTO ip_blacklist (ip_address) VALUES (?)")
-        .bind(&req.ip_address)
+        .bind(ip)
         .execute(pool)
         .await
     {
         Ok(r) => ok_response(serde_json::json!({"id": r.last_insert_rowid()})),
+        Err(e) if e.to_string().contains("UNIQUE") => {
+            error_response(StatusCode::CONFLICT, "IP already in blacklist")
+        }
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
     }
 }
@@ -1668,10 +1698,34 @@ pub async fn add_whitelist(
     State(state): State<Arc<AppState>>,
     Json(req): Json<AddWhitelistRequest>,
 ) -> Response {
+    // Validate IP format
+    let ip = req.ip_address.trim();
+    if !is_valid_ip_or_cidr(ip) {
+        return error_response(StatusCode::BAD_REQUEST, "Invalid IP address format. Expected IPv4, IPv6, or CIDR");
+    }
+
     let pool = &state.db;
-    match sqlx::query("INSERT OR IGNORE INTO ip_whitelist (user_id, ip_address) VALUES (?, ?)")
+
+    // Check if already exists
+    let exists: i64 = match sqlx::query_scalar(
+        "SELECT COUNT(*) FROM ip_whitelist WHERE user_id = ? AND ip_address = ?",
+    )
+    .bind(req.user_id)
+    .bind(ip)
+    .fetch_one(pool)
+    .await
+    {
+        Ok(c) => c,
+        Err(e) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    };
+
+    if exists > 0 {
+        return error_response(StatusCode::CONFLICT, "IP already in this user's whitelist");
+    }
+
+    match sqlx::query("INSERT INTO ip_whitelist (user_id, ip_address) VALUES (?, ?)")
         .bind(req.user_id)
-        .bind(&req.ip_address)
+        .bind(ip)
         .execute(pool)
         .await
     {
