@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, h, onMounted } from 'vue';
-import { NButton, NTag, NSpace, NModal, NForm, NFormItem, NInput, NSelect, NInputNumber, NProgress, NCascader, NSwitch, useDialog, useMessage } from 'naive-ui';
-import { fetchChannelList, fetchCreateChannel, fetchDeleteChannel, fetchUpdateChannel, fetchTestChannel, fetchCreateModel } from '@/service/api';
+import { NButton, NTag, NSpace, NModal, NForm, NFormItem, NInput, NSelect, NInputNumber, NProgress, NSwitch, useDialog, useMessage } from 'naive-ui';
+import { fetchChannelList, fetchCreateChannel, fetchDeleteChannel, fetchUpdateChannel, fetchTestChannel } from '@/service/api';
 import type { DataTableColumns } from 'naive-ui';
 
 const loading = ref(false);
@@ -33,164 +33,6 @@ const typeOptions = [
   { label: 'OpenAI兼容', value: 'openai' },
   { label: 'Anthropic兼容', value: 'anthropic' }
 ];
-
-// Supplier cascader options: Supplier -> Version -> Interface Type
-interface SupplierOption {
-  label: string;
-  value: string;
-  children?: Array<{
-    label: string;
-    value: string;
-    children?: Array<{ label: string; value: string; url: string; type: 'openai' | 'anthropic' }>;
-  }>;
-}
-
-const supplierOptions: SupplierOption[] = [
-  {
-    label: '阿里云 (通义千问)', value: 'aliyun',
-    children: [
-      {
-        label: '标准版', value: 'standard',
-        children: [
-          { label: 'OpenAI 兼容', value: 'openai', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', type: 'openai' },
-          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1/apps/anthropic', type: 'anthropic' },
-        ]
-      },
-      {
-        label: 'CodingPlan 版', value: 'codingplan',
-        children: [
-          { label: 'OpenAI 兼容', value: 'openai', url: 'https://coding.dashscope.aliyuncs.com/v1', type: 'openai' },
-          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://coding.dashscope.aliyuncs.com/apps/anthropic', type: 'anthropic' },
-        ]
-      },
-    ]
-  },
-  {
-    label: '智谱 AI', value: 'zhipu',
-    children: [
-      {
-        label: '标准版', value: 'standard',
-        children: [
-          { label: 'OpenAI 兼容', value: 'openai', url: 'https://open.bigmodel.cn/api/paas/v4', type: 'openai' },
-          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://open.bigmodel.cn/api/paas/v4/anthropic', type: 'anthropic' },
-        ]
-      },
-      {
-        label: 'CodingPlan 版', value: 'codingplan',
-        children: [
-          { label: 'OpenAI 兼容', value: 'openai', url: 'https://open.bigmodel.cn/api/paas/v4', type: 'openai' },
-          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://open.bigmodel.cn/api/anthropic', type: 'anthropic' },
-        ]
-      },
-    ]
-  },
-  {
-    label: 'Kimi (月之暗面)', value: 'kimi',
-    children: [
-      {
-        label: '标准版', value: 'standard',
-        children: [
-          { label: 'OpenAI 兼容', value: 'openai', url: 'https://api.moonshot.cn/v1', type: 'openai' },
-          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://api.moonshot.cn/v1/anthropic', type: 'anthropic' },
-        ]
-      },
-      {
-        label: 'CodingPlan 版', value: 'codingplan',
-        children: [
-          { label: 'OpenAI 兼容', value: 'openai', url: 'https://api.kimi.com/coding/', type: 'openai' },
-          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://api.kimi.com/coding/', type: 'anthropic' },
-        ]
-      },
-    ]
-  },
-  {
-    label: '小米', value: 'xiaomi',
-    children: [
-      {
-        label: '标准版', value: 'standard',
-        children: [
-          { label: 'OpenAI 兼容', value: 'openai', url: 'https://api.miapi.xiaomi.com/v1', type: 'openai' },
-          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://api.miapi.xiaomi.com/v1/anthropic', type: 'anthropic' },
-        ]
-      },
-      {
-        label: 'CodingPlan 版', value: 'codingplan',
-        children: [
-          { label: 'OpenAI 兼容', value: 'openai', url: 'https://token-plan-cn.xiaomimimo.com/v1', type: 'openai' },
-          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://token-plan-cn.xiaomimimo.com/anthropic', type: 'anthropic' },
-        ]
-      },
-    ]
-  },
-  {
-    label: 'MiniMax', value: 'minimax',
-    children: [
-      {
-        label: '标准版', value: 'standard',
-        children: [
-          { label: 'OpenAI 兼容', value: 'openai', url: 'https://api.minimaxi.com/v1', type: 'openai' },
-          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://api.minimaxi.com/v1/anthropic', type: 'anthropic' },
-        ]
-      },
-      {
-        label: 'CodingPlan 版', value: 'codingplan',
-        children: [
-          { label: 'OpenAI 兼容', value: 'openai', url: 'https://api.minimaxi.com/v1/coding', type: 'openai' },
-          { label: 'Anthropic 兼容', value: 'anthropic', url: 'https://api.minimaxi.com/v1/coding/anthropic', type: 'anthropic' },
-        ]
-      },
-    ]
-  },
-  {
-    label: 'OpenAI (官方)', value: 'openai',
-    children: [
-      { label: '标准版', value: 'standard', url: 'https://api.openai.com/v1', type: 'openai' },
-    ]
-  },
-  {
-    label: 'Anthropic (官方)', value: 'anthropic',
-    children: [
-      { label: '标准版', value: 'standard', url: 'https://api.anthropic.com/v1', type: 'anthropic' },
-    ]
-  },
-];
-
-// Model presets for each supplier - common models to import
-const MODEL_PRESETS: Record<string, Array<{ source_name: string; proxy_name: string }>> = {
-  'aliyun': [
-    { source_name: 'qwen-turbo', proxy_name: 'qwen-turbo' },
-    { source_name: 'qwen-plus', proxy_name: 'qwen-plus' },
-    { source_name: 'qwen-max', proxy_name: 'qwen-max' },
-    { source_name: 'qwen-long', proxy_name: 'qwen-long' },
-  ],
-  'zhipu': [
-    { source_name: 'glm-4-plus', proxy_name: 'glm-4-plus' },
-    { source_name: 'glm-4-flash', proxy_name: 'glm-4-flash' },
-    { source_name: 'glm-4', proxy_name: 'glm-4' },
-  ],
-  'kimi': [
-    { source_name: 'moonshot-v1-8k', proxy_name: 'moonshot-v1-8k' },
-    { source_name: 'moonshot-v1-32k', proxy_name: 'moonshot-v1-32k' },
-    { source_name: 'moonshot-v1-128k', proxy_name: 'moonshot-v1-128k' },
-  ],
-  'xiaomi': [
-    { source_name: 'MiMo', proxy_name: 'MiMo' },
-  ],
-  'minimax': [
-    { source_name: 'MiniMax-M2.1', proxy_name: 'MiniMax-M2.1' },
-    { source_name: 'MiniMax-Text-01', proxy_name: 'MiniMax-Text-01' },
-  ],
-  'openai': [
-    { source_name: 'gpt-4o', proxy_name: 'gpt-4o' },
-    { source_name: 'gpt-4o-mini', proxy_name: 'gpt-4o-mini' },
-    { source_name: 'gpt-4', proxy_name: 'gpt-4' },
-  ],
-  'anthropic': [
-    { source_name: 'claude-sonnet-4-20250514', proxy_name: 'claude-sonnet-4' },
-    { source_name: 'claude-opus-4-20250416', proxy_name: 'claude-opus-4' },
-    { source_name: 'claude-haiku-4-20250324', proxy_name: 'claude-haiku-4' },
-  ],
-};
 
 function formatTokenNum(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -383,83 +225,7 @@ async function handleSave() {
     message.success(isEdit.value ? '渠道已更新' : '渠道创建成功');
     showModal.value = false;
     await loadData();
-
-    // After creating a new channel, offer to import common models
-    if (!isEdit.value && !editingId.value) {
-      // Find the newly created channel
-      const newChannel = channels.value[0];
-      if (newChannel) {
-        const supplier = Object.keys(MODEL_PRESETS).find(key =>
-          newChannel.name.includes(MODEL_PRESETS[key][0]?.proxy_name || '')
-        ) || findSupplierFromUrl(newChannel.base_url);
-        if (supplier && MODEL_PRESETS[supplier]) {
-          offerImportModels(newChannel.id, supplier);
-        }
-      }
-    }
   }
-}
-
-function onSupplierSelect(value: string[], option: any[]) {
-  // value is [supplier, version, interface_type]
-  if (option.length >= 3) {
-    const supplier = option[0];
-    const version = option[1];
-    const iface = option[option.length - 1];
-    formModel.value.name = `${supplier.label} ${version.label}`;
-    formModel.value.base_url = iface.url;
-    formModel.value.type = iface.type;
-  } else if (option.length === 2) {
-    // Fallback for 2-level options (OpenAI/Anthropic official)
-    const supplier = option[0];
-    const child = option[1];
-    formModel.value.name = supplier.label;
-    formModel.value.base_url = child.url || '';
-    formModel.value.type = child.type || 'openai';
-  }
-}
-
-// Find supplier key from base_url
-function findSupplierFromUrl(url: string): string | null {
-  if (url.includes('dashscope')) return 'aliyun';
-  if (url.includes('bigmodel')) return 'zhipu';
-  if (url.includes('moonshot') || url.includes('kimi')) return 'kimi';
-  if (url.includes('xiaoai') || url.includes('miapi') || url.includes('mimo')) return 'xiaomi';
-  if (url.includes('minimax')) return 'minimax';
-  if (url.includes('openai.com')) return 'openai';
-  if (url.includes('anthropic.com')) return 'anthropic';
-  return null;
-}
-
-// Offer to import common models after channel creation
-function offerImportModels(channelId: number, supplier: string) {
-  const presets = MODEL_PRESETS[supplier] || [];
-  if (presets.length === 0) return;
-
-  const modelNames = presets.map(p => p.proxy_name).join(', ');
-  dialog.warning({
-    title: '导入常见模型',
-    content: `检测到您添加了${supplier === 'aliyun' ? '阿里云' : supplier === 'zhipu' ? '智谱' : supplier === 'kimi' ? 'Kimi' : supplier === 'xiaomi' ? '小米' : supplier === 'minimax' ? 'MiniMax' : supplier === 'openai' ? 'OpenAI' : 'Anthropic'}渠道，是否一键导入以下常见模型？\n\n${modelNames}`,
-    positiveText: '导入',
-    negativeText: '跳过',
-    onPositiveClick: async () => {
-      let successCount = 0;
-      for (const m of presets) {
-        const { error } = await fetchCreateModel({
-          channel_id: channelId,
-          source_name: m.source_name,
-          proxy_name: m.proxy_name,
-          enabled: true,
-          is_default: false
-        });
-        if (!error) successCount++;
-      }
-      if (successCount > 0) {
-        message.success(`已导入 ${successCount}/${presets.length} 个模型`);
-        await loadData();
-      }
-    }
-  });
 }
 
 async function handleTest(row: Api.Channel.Channel) {
@@ -534,15 +300,6 @@ onMounted(() => {
         </NFormItem>
         <NFormItem label="类型">
           <NSelect v-model:value="formModel.type" :options="typeOptions" />
-        </NFormItem>
-        <NFormItem label="供应商预设">
-          <NCascader
-            :options="supplierOptions"
-            placeholder="选择供应商 → 版本 → 自动填充"
-            clearable
-            expand-trigger="hover"
-            @update:value="onSupplierSelect"
-          />
         </NFormItem>
         <NFormItem label="BaseURL">
           <NInput v-model:value="formModel.base_url" placeholder="https://api.openai.com/v1" />
