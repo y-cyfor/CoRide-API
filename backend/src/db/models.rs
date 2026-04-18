@@ -585,14 +585,16 @@ pub async fn create_quota(
     quota_type: &str,
     total_limit: i64,
     cycle: &str,
+    channel_id: Option<i64>,
 ) -> Result<i64, sqlx::Error> {
     let result = sqlx::query(
-        "INSERT INTO quotas (user_id, quota_type, total_limit, cycle, enabled) VALUES (?, ?, ?, ?, true)",
+        "INSERT INTO quotas (user_id, quota_type, total_limit, cycle, channel_id, enabled) VALUES (?, ?, ?, ?, ?, true)",
     )
     .bind(user_id)
     .bind(quota_type)
     .bind(total_limit)
     .bind(cycle)
+    .bind(channel_id)
     .execute(pool)
     .await?;
     Ok(result.last_insert_rowid())

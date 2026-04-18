@@ -70,9 +70,9 @@ async fn main() {
         .route("/v1/messages", post(proxy_routes::messages))
         .route("/v1/models", get(proxy_routes::list_models))
         .route("/v1/user/info", get(proxy_routes::user_info))
-        .layer(from_fn_with_state(state.clone(), auth::auth_middleware))
+        .layer(from_fn_with_state(state.clone(), ip_filter::ip_filter))
         .layer(from_fn_with_state(state.clone(), rate_limit::rate_limit_middleware))
-        .layer(from_fn_with_state(state.clone(), ip_filter::ip_filter));
+        .layer(from_fn_with_state(state.clone(), auth::auth_middleware));
 
     // 9. Build admin routes
     let admin_public = Router::new()

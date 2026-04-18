@@ -9,20 +9,15 @@ use std::sync::Arc;
 
 use crate::AppState;
 
-/// Extract client IP from request headers (X-Real-IP > X-Forwarded-For > remote_addr).
+/// Extract client IP from request.
+/// Priority: X-Real-IP (set by trusted proxy like nginx) > remote_addr.
+/// We do NOT trust X-Forwarded-For as it can be spoofed by clients.
 fn extract_client_ip(req: &Request<Body>) -> String {
     if let Some(real_ip) = req.headers().get("X-Real-IP") {
         if let Ok(ip) = real_ip.to_str() {
-            return ip.trim().to_string();
-        }
-    }
-    if let Some(xff) = req.headers().get("X-Forwarded-For") {
-        if let Ok(xff_str) = xff.to_str() {
-            if let Some(first_ip) = xff_str.split(',').next() {
-                let trimmed = first_ip.trim().to_string();
-                if !trimmed.is_empty() {
-                    return trimmed;
-                }
+            let trimmed = ip.trim().to_string();
+            if !trimmed.is_empty() {
+                return trimmed;
             }
         }
     }

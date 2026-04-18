@@ -68,19 +68,49 @@ fn build_headers(
         headers.insert("User-Agent".to_string(), profile.user_agent.clone());
         if let Some(ref extra) = profile.extra_headers {
             if let Ok(map) = serde_json::from_str::<HashMap<String, String>>(extra) {
+                // Merge anthropic-beta values instead of overwriting
+                if channel_type == "anthropic" {
+                    merge_anthropic_beta(&mut headers, &map);
+                } else {
+                    headers.extend(map);
+                }
+            }
+        }
+    }
+
+    // Channel custom headers
+    if let Some(ref custom) = channel.custom_headers {
+        if let Ok(map) = serde_json::from_str::<HashMap<String, String>>(custom) {
+            // Merge anthropic-beta values instead of overwriting
+            if channel_type == "anthropic" {
+                merge_anthropic_beta(&mut headers, &map);
+            } else {
                 headers.extend(map);
             }
         }
     }
 
-    // Channel custom headers override
-    if let Some(ref custom) = channel.custom_headers {
-        if let Ok(map) = serde_json::from_str::<HashMap<String, String>>(custom) {
-            headers.extend(map);
+    headers
+}
+
+/// Merge anthropic-beta header values, avoiding duplicates.
+fn merge_anthropic_beta(headers: &mut HashMap<String, String>, extra: &HashMap<String, String>) {
+    for (key, value) in extra {
+        if key == "anthropic-beta" {
+            let existing = headers.entry(key.clone()).or_default();
+            // Comma-separated merge, avoid duplicates
+            let mut parts: Vec<&str> = existing.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+            for part in value.split(',') {
+                let trimmed = part.trim();
+                if !trimmed.is_empty() && !parts.contains(&trimmed) {
+                    parts.push(trimmed);
+                }
+            }
+            *existing = parts.join(", ");
+        } else {
+            headers.insert(key.clone(), value.clone());
         }
     }
-
-    headers
 }
 
 /// Proxy a request to the upstream channel (non-streaming mode).
