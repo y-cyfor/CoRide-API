@@ -192,6 +192,12 @@ const MODEL_PRESETS: Record<string, Array<{ source_name: string; proxy_name: str
   ],
 };
 
+function formatTokenNum(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString();
+}
+
 const columns: DataTableColumns<Api.Channel.Channel> = [
   { title: 'ID', key: 'id', width: 60 },
   { title: '名称', key: 'name' },
@@ -211,6 +217,34 @@ const columns: DataTableColumns<Api.Channel.Channel> = [
       if (failures === 0) return h(NTag, { type: 'success', size: 'small' }, { default: () => '正常' });
       if (failures < 3) return h(NTag, { type: 'warning', size: 'small' }, { default: () => `${failures}次` });
       return h(NTag, { type: 'error', size: 'small' }, { default: () => '异常' });
+    }
+  },
+  {
+    title: '累计用量',
+    key: 'total_usage',
+    width: 140,
+    render: row => {
+      const stats = (row as any).stats;
+      const reqs = stats?.total_requests ?? 0;
+      const toks = stats?.total_tokens ?? 0;
+      return h('div', { style: 'font-size: 12px' }, [
+        h('div', null, `${reqs.toLocaleString()} 次`),
+        h('div', { style: 'color: #999; font-size: 11px' }, `${formatTokenNum(toks)} tokens`)
+      ]);
+    }
+  },
+  {
+    title: '今日用量',
+    key: 'today_usage',
+    width: 140,
+    render: row => {
+      const stats = (row as any).stats;
+      const reqs = stats?.today_requests ?? 0;
+      const toks = stats?.today_tokens ?? 0;
+      return h('div', { style: 'font-size: 12px' }, [
+        h('div', null, `${reqs.toLocaleString()} 次`),
+        h('div', { style: 'color: #999; font-size: 11px' }, `${formatTokenNum(toks)} tokens`)
+      ]);
     }
   },
   {
