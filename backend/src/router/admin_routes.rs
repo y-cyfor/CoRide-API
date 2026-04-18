@@ -1385,6 +1385,17 @@ pub async fn quota_warnings(
     }))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct AddBlacklistRequest {
+    pub ip_address: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AddWhitelistRequest {
+    pub user_id: i64,
+    pub ip_address: String,
+}
+
 // === Traffic Plan endpoints ===
 
 #[derive(Debug, Deserialize)]
@@ -1586,6 +1597,97 @@ pub async fn delete_channel_traffic_plan(
     let pool = &state.db;
     match models::delete_traffic_plan_by_channel(pool, channel_id).await {
         Ok(()) => ok_response(serde_json::json!({ "deleted": true })),
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
+/// GET /admin/ip/blacklist
+pub async fn list_blacklist(
+    State(state): State<Arc<AppState>>,
+) -> Response {
+    let pool = &state.db;
+    match sqlx::query_as::<_, (i64, String, String)>("SELECT id, ip_address, created_at FROM ip_blacklist ORDER BY created_at DESC")
+        .fetch_all(pool)
+        .await
+    {
+        Ok(entries) => ok_response(entries.iter().map(|(id, ip, created)| {
+            serde_json::json!({"id": id, "ip_address": ip, "created_at": created})
+        }).collect::<Vec<_>>()),
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
+/// POST /admin/ip/blacklist
+pub async fn add_blacklist(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<AddBlacklistRequest>,
+) -> Response {
+    let pool = &state.db;
+    match sqlx::query("INSERT INTO ip_blacklist (ip_address) VALUES (?)")
+        .bind(&req.ip_address)
+        .execute(pool)
+        .await
+    {
+        Ok(r) => ok_response(serde_json::json!({"id": r.last_insert_rowid()})),
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
+/// DELETE /admin/ip/blacklist/{id}
+pub async fn delete_blacklist(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<i64>,
+) -> Response {
+    let pool = &state.db;
+    match sqlx::query("DELETE FROM ip_blacklist WHERE id = ?").bind(id).execute(pool).await {
+        Ok(_) => ok_response(serde_json::json!({"deleted": true})),
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
+/// GET /admin/ip/whitelist/{user_id}
+pub async fn list_user_whitelist(
+    State(state): State<Arc<AppState>>,
+    Path(user_id): Path<i64>,
+) -> Response {
+    let pool = &state.db;
+    match sqlx::query_as::<_, (i64, i64, String, String)>("SELECT id, user_id, ip_address, created_at FROM ip_whitelist WHERE user_id = ? ORDER BY created_at")
+        .bind(user_id)
+        .fetch_all(pool)
+        .await
+    {
+        Ok(entries) => ok_response(entries.iter().map(|(id, uid, ip, created)| {
+            serde_json::json!({"id": id, "user_id": uid, "ip_address": ip, "created_at": created})
+        }).collect::<Vec<_>>()),
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
+/// POST /admin/ip/whitelist
+pub async fn add_whitelist(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<AddWhitelistRequest>,
+) -> Response {
+    let pool = &state.db;
+    match sqlx::query("INSERT OR IGNORE INTO ip_whitelist (user_id, ip_address) VALUES (?, ?)")
+        .bind(req.user_id)
+        .bind(&req.ip_address)
+        .execute(pool)
+        .await
+    {
+        Ok(r) => ok_response(serde_json::json!({"id": r.last_insert_rowid()})),
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
+/// DELETE /admin/ip/whitelist/{id}
+pub async fn delete_whitelist(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<i64>,
+) -> Response {
+    let pool = &state.db;
+    match sqlx::query("DELETE FROM ip_whitelist WHERE id = ?").bind(id).execute(pool).await {
+        Ok(_) => ok_response(serde_json::json!({"deleted": true})),
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
     }
 }

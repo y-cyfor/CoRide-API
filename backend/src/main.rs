@@ -150,6 +150,13 @@ async fn main() {
         .route("/admin/traffic-plan/channel/{id}", get(admin_routes::get_channel_traffic_plan))
         .route("/admin/traffic-plan/channel/{id}", put(admin_routes::upsert_channel_traffic_plan))
         .route("/admin/traffic-plan/channel/{id}", delete(admin_routes::delete_channel_traffic_plan))
+        // IP access control
+        .route("/admin/ip/blacklist", get(admin_routes::list_blacklist))
+        .route("/admin/ip/blacklist", post(admin_routes::add_blacklist))
+        .route("/admin/ip/blacklist/{id}", delete(admin_routes::delete_blacklist))
+        .route("/admin/ip/whitelist/{user_id}", get(admin_routes::list_user_whitelist))
+        .route("/admin/ip/whitelist", post(admin_routes::add_whitelist))
+        .route("/admin/ip/whitelist/{id}", delete(admin_routes::delete_whitelist))
         .layer(from_fn_with_state(state.clone(), admin_auth::admin_auth_middleware));
 
     // 10. Combine all routes
