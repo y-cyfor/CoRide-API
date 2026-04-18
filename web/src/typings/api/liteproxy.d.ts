@@ -66,6 +66,12 @@ declare namespace Api {
       app_profile_id?: number;
       created_at: string;
       updated_at: string;
+      stats?: {
+        total_requests: number;
+        total_tokens: number;
+        today_requests: number;
+        today_tokens: number;
+      };
     }
 
     interface CreateChannelParams {

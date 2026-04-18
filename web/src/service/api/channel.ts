@@ -42,3 +42,16 @@ export function fetchTestChannel(id: number) {
     method: 'post'
   });
 }
+
+/** Get channel usage stats */
+export function fetchChannelStats(id: number) {
+  return request<{
+    total_requests: number;
+    total_tokens: number;
+    today_requests: number;
+    today_tokens: number;
+  }>({
+    url: `/admin/channels/${id}/stats`,
+    method: 'get'
+  });
+}
