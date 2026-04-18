@@ -347,7 +347,7 @@ pub async fn list_channels(
                 "SELECT channel_id,
                         COUNT(*) as total_requests,
                         COALESCE(SUM(total_tokens), 0) as total_tokens,
-                        SUM(CASE WHEN created_at >= datetime('now', 'start of day') THEN 1 ELSE 0 END) as today_requests,
+                        COALESCE(SUM(CASE WHEN created_at >= datetime('now', 'start of day') THEN 1 ELSE 0 END), 0) as today_requests,
                         COALESCE(SUM(CASE WHEN created_at >= datetime('now', 'start of day') THEN total_tokens ELSE 0 END), 0) as today_tokens
                  FROM request_logs
                  GROUP BY channel_id"
@@ -754,9 +754,9 @@ pub async fn dashboard_stats(
     .await
     .ok();
 
-    // P95 latency (last 1000 requests)
+    // P95 latency — ASC order: 95% of requests are at or below this value
     let p95_ms: Option<i64> = sqlx::query_scalar(
-        "SELECT elapsed_ms FROM request_logs ORDER BY elapsed_ms DESC LIMIT 1 OFFSET (SELECT COUNT(*) * 95 / 100 FROM request_logs)"
+        "SELECT elapsed_ms FROM request_logs ORDER BY elapsed_ms ASC LIMIT 1 OFFSET (SELECT COUNT(*) * 95 / 100 FROM request_logs)"
     )
     .fetch_optional(pool)
     .await
@@ -1841,7 +1841,7 @@ pub async fn user_dashboard_stats(
     let total_requests: Option<i64> = sqlx::query_scalar("SELECT COUNT(*) FROM request_logs WHERE user_api_key = ?").bind(&key).fetch_one(pool).await.ok();
     let today_requests: Option<i64> = sqlx::query_scalar("SELECT COUNT(*) FROM request_logs WHERE user_api_key = ? AND created_at >= datetime('now', '-1 day')").bind(&key).fetch_one(pool).await.ok();
     let total_tokens: Option<i64> = sqlx::query_scalar("SELECT COALESCE(SUM(total_tokens), 0) FROM request_logs WHERE user_api_key = ?").bind(&key).fetch_one(pool).await.ok();
-    let p95_ms: Option<i64> = sqlx::query_scalar("SELECT elapsed_ms FROM request_logs WHERE user_api_key = ? ORDER BY elapsed_ms DESC LIMIT 1 OFFSET (SELECT COUNT(*) * 95 / 100 FROM request_logs WHERE user_api_key = ?)").bind(&key).bind(&key).fetch_optional(pool).await.ok().flatten();
+    let p95_ms: Option<i64> = sqlx::query_scalar("SELECT elapsed_ms FROM request_logs WHERE user_api_key = ? ORDER BY elapsed_ms ASC LIMIT 1 OFFSET (SELECT COUNT(*) * 95 / 100 FROM request_logs WHERE user_api_key = ?)").bind(&key).bind(&key).fetch_optional(pool).await.ok().flatten();
     let error_count: Option<i64> = sqlx::query_scalar("SELECT COUNT(*) FROM request_logs WHERE user_api_key = ? AND status_code >= 400").bind(&key).fetch_one(pool).await.ok();
 
     let total = total_requests.unwrap_or(0);
