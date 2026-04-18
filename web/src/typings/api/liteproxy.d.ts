@@ -269,4 +269,29 @@ declare namespace Api {
       status: string;
     }
   }
+
+  /** IP Access types */
+  namespace IpAccess {
+    interface BlacklistEntry {
+      id: number;
+      ip_address: string;
+      created_at: string;
+    }
+
+    interface WhitelistEntry {
+      id: number;
+      user_id: number;
+      ip_address: string;
+      created_at: string;
+    }
+
+    interface AddBlacklistParams {
+      ip_address: string;
+    }
+
+    interface AddWhitelistParams {
+      user_id: number;
+      ip_address: string;
+    }
+  }
 }

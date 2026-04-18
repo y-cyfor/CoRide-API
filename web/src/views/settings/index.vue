@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { NCard, NSpace, NDescriptions, NDescriptionsItem, NTag, NSpin, NSelect, NInputNumber, NButton, useMessage, NSwitch, NFormItem, NForm, NAlert } from 'naive-ui';
+import { ref, h, onMounted } from 'vue';
+import { NCard, NSpace, NDescriptions, NDescriptionsItem, NTag, NSpin, NSelect, NInputNumber, NButton, useMessage, NSwitch, NFormItem, NForm, NAlert, NInput, NDataTable, NPopconfirm } from 'naive-ui';
 import { request } from '@/service/request';
+import { fetchBlacklistList, fetchAddBlacklist, fetchDeleteBlacklist } from '@/service/api/ip';
+import type { DataTableColumns } from 'naive-ui';
 
 const loading = ref(true);
 const saving = ref(false);
@@ -83,8 +85,59 @@ async function updateRateLimit() {
   saving.value = false;
 }
 
+// IP Blacklist
+const blacklist = ref<Api.IpAccess.BlacklistEntry[]>([]);
+const newIp = ref('');
+
+const blacklistColumns: DataTableColumns<Api.IpAccess.BlacklistEntry> = [
+  { title: 'IP 地址', key: 'ip_address' },
+  { title: '添加时间', key: 'created_at', width: 200 },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 80,
+    render: row => h(NPopconfirm, { onPositiveClick: () => handleDeleteBlacklist(row.id) }, {
+      trigger: () => h(NButton, { size: 'small', type: 'error', text: true }, { default: () => '删除' }),
+      default: () => `确定要移除 IP "${row.ip_address}" 吗？`
+    })
+  }
+];
+
+async function loadBlacklist() {
+  const { data, error } = await fetchBlacklistList();
+  if (!error && data) {
+    blacklist.value = data;
+  }
+}
+
+async function handleAddBlacklist() {
+  if (!newIp.value.trim()) {
+    message.warning('请输入 IP 地址');
+    return;
+  }
+  const { error } = await fetchAddBlacklist({ ip_address: newIp.value.trim() });
+  if (!error) {
+    message.success('IP 已加入黑名单');
+    newIp.value = '';
+    await loadBlacklist();
+  } else {
+    message.error('添加失败');
+  }
+}
+
+async function handleDeleteBlacklist(id: number) {
+  const { error } = await fetchDeleteBlacklist(id);
+  if (!error) {
+    message.success('已从黑名单移除');
+    await loadBlacklist();
+  } else {
+    message.error('移除失败');
+  }
+}
+
 onMounted(() => {
   loadConfig();
+  loadBlacklist();
 });
 </script>
 
@@ -177,6 +230,23 @@ onMounted(() => {
               <NButton type="primary" size="small" :loading="saving" @click="updateRateLimit">保存限流配置</NButton>
             </NSpace>
             <NAlert type="warning" size="small">修改后需重启服务才能生效</NAlert>
+          </NSpace>
+        </NCard>
+
+        <!-- IP Blacklist -->
+        <NCard title="IP 黑名单" :bordered="false" class="card-wrapper">
+          <NSpace vertical :size="12">
+            <NSpace>
+              <NInput v-model:value="newIp" placeholder="输入 IP 地址" style="width: 220px" @keyup.enter="handleAddBlacklist" />
+              <NButton type="primary" @click="handleAddBlacklist">添加</NButton>
+            </NSpace>
+            <NDataTable
+              :columns="blacklistColumns"
+              :data="blacklist"
+              :pagination="false"
+              :row-key="(row: Api.IpAccess.BlacklistEntry) => row.id"
+              size="small"
+            />
           </NSpace>
         </NCard>
       </NSpace>

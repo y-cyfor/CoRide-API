@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, h, onMounted } from 'vue';
-import { NButton, NTag, NSpace, NModal, NForm, NFormItem, NInput, NInputNumber, NSelect, NCascader, NProgress, useDialog, useMessage, NPopconfirm } from 'naive-ui';
+import { NButton, NTag, NSpace, NModal, NForm, NFormItem, NInput, NInputNumber, NSelect, NCascader, NProgress, useDialog, useMessage, NPopconfirm, NCard } from 'naive-ui';
 import { fetchUserList, fetchCreateUser, fetchUpdateUser, fetchResetUserKey, fetchDeleteUser, fetchModelList } from '@/service/api';
+import { fetchUserWhitelist, fetchAddWhitelist, fetchDeleteWhitelist } from '@/service/api/ip';
 import type { DataTableColumns } from 'naive-ui';
 
 const loading = ref(false);
@@ -10,6 +11,13 @@ const dialog = useDialog();
 const message = useMessage();
 const isEdit = ref(false);
 const editingId = ref<number | null>(null);
+
+// IP Whitelist
+const showWhitelistModal = ref(false);
+const whitelistUserId = ref<number | null>(null);
+const whitelistUserName = ref('');
+const whitelistEntries = ref<Api.IpAccess.WhitelistEntry[]>([]);
+const newWhitelistIp = ref('');
 
 const pagination = ref({
   page: 1,
@@ -62,6 +70,49 @@ function copyApiKey(key: string) {
   }).catch(() => {
     message.error('复制失败');
   });
+}
+
+// Whitelist management
+async function openWhitelist(row: Api.User.User) {
+  whitelistUserId.value = row.id;
+  whitelistUserName.value = row.username;
+  showWhitelistModal.value = true;
+  await loadWhitelist(row.id);
+}
+
+async function loadWhitelist(userId: number) {
+  const { data, error } = await fetchUserWhitelist(userId);
+  if (!error && data) {
+    whitelistEntries.value = data;
+  }
+}
+
+async function handleAddWhitelist() {
+  if (!newWhitelistIp.value.trim() || !whitelistUserId.value) {
+    message.warning('请输入 IP 地址');
+    return;
+  }
+  const { error } = await fetchAddWhitelist({
+    user_id: whitelistUserId.value,
+    ip_address: newWhitelistIp.value.trim()
+  });
+  if (!error) {
+    message.success('IP 已加入白名单');
+    newWhitelistIp.value = '';
+    if (whitelistUserId.value) await loadWhitelist(whitelistUserId.value);
+  } else {
+    message.error('添加失败');
+  }
+}
+
+async function handleDeleteWhitelist(id: number) {
+  const { error } = await fetchDeleteWhitelist(id);
+  if (!error) {
+    message.success('已从白名单移除');
+    if (whitelistUserId.value) await loadWhitelist(whitelistUserId.value);
+  } else {
+    message.error('移除失败');
+  }
 }
 
 // Calculate quota usage percentage
@@ -135,11 +186,12 @@ const columns: DataTableColumns<Api.User.User> = [
   {
     title: '操作',
     key: 'actions',
-    width: 200,
+    width: 280,
     render: row => h(NSpace, {}, {
       default: () => [
         h(NButton, { size: 'small', onClick: () => handleEdit(row) }, { default: () => '编辑' }),
         h(NButton, { size: 'small', onClick: () => handleResetKey(row) }, { default: () => '重置Key' }),
+        h(NButton, { size: 'small', type: 'warning', onClick: () => openWhitelist(row) }, { default: () => 'IP白名单' }),
         h(NPopconfirm, { onPositiveClick: () => handleDelete(row) }, {
           trigger: () => h(NButton, { size: 'small', type: 'error' }, { default: () => '删除' }),
           default: () => `确定要删除用户 "${row.username}" 吗？此操作不可撤销。`
@@ -320,6 +372,28 @@ onMounted(() => {
           <NButton type="primary" @click="handleSave">保存</NButton>
         </NSpace>
       </template>
+    </NModal>
+
+    <!-- IP Whitelist Modal -->
+    <NModal v-model:show="showWhitelistModal" preset="card" :title="`IP 白名单 — ${whitelistUserName}`" style="width: 550px">
+      <NSpace vertical :size="12">
+        <NSpace>
+          <NInput v-model:value="newWhitelistIp" placeholder="输入 IP 地址" style="width: 220px" @keyup.enter="handleAddWhitelist" />
+          <NButton type="primary" @click="handleAddWhitelist">添加</NButton>
+        </NSpace>
+        <NSpace wrap>
+          <NTag
+            v-for="entry in whitelistEntries"
+            :key="entry.id"
+            closable
+            type="info"
+            @close="handleDeleteWhitelist(entry.id)"
+          >
+            {{ entry.ip_address }}
+          </NTag>
+          <span v-if="whitelistEntries.length === 0" style="color: #999; font-size: 12px">暂无白名单 IP</span>
+        </NSpace>
+      </NSpace>
     </NModal>
   </NSpace>
 </template>
