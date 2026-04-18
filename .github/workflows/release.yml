@@ -83,12 +83,40 @@ jobs:
           zip -r coride-api-${{ steps.version.outputs.VERSION }}.zip coride-api-${{ steps.version.outputs.VERSION }}/
           tar -czf coride-api-${{ steps.version.outputs.VERSION }}.tar.gz coride-api-${{ steps.version.outputs.VERSION }}/
 
+      - name: Generate release notes
+        id: notes
+        run: |
+          # Fetch all tags and history for proper diff
+          git fetch --tags --unshallow 2>/dev/null || git fetch --tags
+          PREV_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.' | grep -v "^v${{ steps.version.outputs.VERSION }}$" | head -1)
+          if [ -z "$PREV_TAG" ]; then
+            PREV_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+          echo "PREV_TAG=$PREV_TAG" >> $GITHUB_OUTPUT
+
+          # Generate changelog from git log
+          CHANGELOG=$(git log "$PREV_TAG..HEAD" --pretty=format:"- %s (%h)" --no-merges)
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Create Release
         env:
           GH_TOKEN: ${{ github.token }}
+          PREV_TAG: ${{ steps.notes.outputs.PREV_TAG }}
         run: |
+          cat > /tmp/release-notes.md << EOF
+          ## CoRide-API v${{ steps.version.outputs.VERSION }}
+
+          ### 更新内容
+
+          ${{ steps.notes.outputs.CHANGELOG }}
+
+          **Full Changelog**: [\`$PREV_TAG\`...\`v${{ steps.version.outputs.VERSION }}\`](https://github.com/${{ github.repository }}/compare/${PREV_TAG}...v${{ steps.version.outputs.VERSION }})
+          EOF
+
           gh release create "v${{ steps.version.outputs.VERSION }}" \
             --title "v${{ steps.version.outputs.VERSION }}" \
-            --generate-notes \
+            --notes-file /tmp/release-notes.md \
             coride-api-${{ steps.version.outputs.VERSION }}.zip \
             coride-api-${{ steps.version.outputs.VERSION }}.tar.gz
