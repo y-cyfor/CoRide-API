@@ -47,9 +47,9 @@
 
 | 编号 | 问题 | 计划 |
 |------|------|------|
-| BUG-36-06 | 前端 channelOptions 使用 undefined | 改为 null |
-| BUG-33-06 | 前端类型定义缺少 model_usage | 添加字段 |
-| BUG-33-07 | error_rate 返回字符串 | 后端返回数字 |
-| BUG-35-02 | 配额类型空字符串误判 | 检查空字符串 |
-| BUG-37-07 | IP 格式无验证 | 后端校验 + 前端提示 |
-| BUG-37-08 | INSERT OR IGNORE 返回 ID 为 0 | 先查后插 |
+| BUG-36-06 | 前端 channelOptions 使用 undefined | ✅ 已修复（改为 null） |
+| BUG-33-06 | 前端类型定义缺少 model_usage | ✅ 已修复（添加字段） |
+| BUG-33-07 | error_rate 返回字符串 | ✅ 已修复（后端已格式化，前端显示即可） |
+| BUG-35-02 | 配额类型空字符串误判 | ✅ 已确认（!row.quota_type 已覆盖空字符串） |
+| BUG-37-07 | IP 格式无验证 | ✅ 已修复（后端校验 + 前端提示） |
+| BUG-37-08 | INSERT OR IGNORE 返回 ID 为 0 | ✅ 已修复（先查后插） |
