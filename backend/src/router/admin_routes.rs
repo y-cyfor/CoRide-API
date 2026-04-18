@@ -60,6 +60,7 @@ pub struct CreateQuotaRequest {
     pub quota_type: String,
     pub total_limit: i64,
     pub cycle: String,
+    pub channel_id: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -619,7 +620,7 @@ pub async fn create_quota(
     let (period_start, period_end) = crate::service::quota::init_quota_period(&req.cycle);
 
     let result = sqlx::query(
-        "INSERT INTO quotas (user_id, quota_type, total_limit, cycle, period_start, period_end, enabled) VALUES (?, ?, ?, ?, ?, ?, true)",
+        "INSERT INTO quotas (user_id, quota_type, total_limit, cycle, period_start, period_end, channel_id, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, true)",
     )
     .bind(req.user_id)
     .bind(&req.quota_type)
@@ -627,6 +628,7 @@ pub async fn create_quota(
     .bind(&req.cycle)
     .bind(period_start)
     .bind(period_end)
+    .bind(req.channel_id)
     .execute(pool);
 
     match result.await {
