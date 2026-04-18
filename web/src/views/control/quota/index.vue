@@ -2,6 +2,7 @@
 import { ref, h, onMounted } from 'vue';
 import { NButton, NTag, NSpace, NModal, NForm, NFormItem, NInput, NSelect, useDialog, useMessage } from 'naive-ui';
 import { fetchQuotaList, fetchCreateQuota, fetchUpdateQuota, fetchDeleteQuota, fetchUserList } from '@/service/api';
+import { fetchChannelList } from '@/service/api/channel';
 import type { DataTableColumns } from 'naive-ui';
 
 const loading = ref(false);
@@ -26,6 +27,8 @@ const formModel = ref<Partial<Api.Quota.CreateQuotaParams & { total_limit: numbe
 });
 
 const userOptions = ref<{ label: string; value: number }[]>([]);
+const channelOptions = ref<{ label: string; value: number | undefined }[]>([]);
+const channels = ref<Map<number, string>>(new Map());
 
 const quotaTypeOptions = [
   { label: '请求次数', value: 'requests' },
@@ -48,9 +51,18 @@ async function loadUsers() {
   }
 }
 
+async function loadChannels() {
+  const { data } = await fetchChannelList(1, 100);
+  if (data) {
+    channelOptions.value = [{ label: '全部（用户级配额）', value: undefined }, ...data.map(c => ({ label: c.name, value: c.id }))];
+    channels.value = new Map(data.map((c: Api.Channel.Channel) => [c.id, c.name]));
+  }
+}
+
 const columns: DataTableColumns<Api.Quota.Quota> = [
   { title: 'ID', key: 'id', width: 60 },
   { title: '用户', key: 'username', width: 100, render: row => users.value.get(row.user_id) || `#${row.user_id}` },
+  { title: '渠道', key: 'channel', width: 100, render: row => row.channel_id ? (channels.value.get(row.channel_id) || `#${row.channel_id}`) : '全部' },
   { title: '类型', key: 'quota_type', width: 80, render: row => h(NTag, { type: row.quota_type === 'tokens' ? 'warning' : 'info' }, { default: () => row.quota_type }) },
   { title: '总限额', key: 'total_limit', width: 100 },
   { title: '已使用', key: 'used', width: 80 },
@@ -82,7 +94,7 @@ async function loadData() {
 function handleCreate() {
   isEdit.value = false;
   editingId.value = null;
-  formModel.value = { user_id: undefined as unknown as number, quota_type: 'tokens', total_limit: 0, cycle: 'daily' };
+  formModel.value = { user_id: undefined as unknown as number, quota_type: 'tokens', total_limit: 0, cycle: 'daily', channel_id: undefined };
   showModal.value = true;
 }
 
@@ -135,6 +147,7 @@ async function handleDelete(row: Api.Quota.Quota) {
 onMounted(() => {
   loadData();
   loadUsers();
+  loadChannels();
 });
 </script>
 
@@ -161,6 +174,9 @@ onMounted(() => {
       <NForm :model="formModel" label-placement="left" label-width="80">
         <NFormItem v-if="!isEdit" label="用户">
           <NSelect v-model:value="formModel.user_id" :options="userOptions" filterable placeholder="搜索并选择用户" />
+        </NFormItem>
+        <NFormItem v-if="!isEdit" label="渠道">
+          <NSelect v-model:value="formModel.channel_id" :options="channelOptions" placeholder="留空为用户级配额" />
         </NFormItem>
         <NFormItem v-if="!isEdit" label="类型">
           <NSelect v-model:value="formModel.quota_type" :options="quotaTypeOptions" />

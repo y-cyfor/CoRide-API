@@ -118,6 +118,7 @@ declare namespace Api {
       total_limit: number;
       used: number;
       cycle: string;
+      channel_id?: number | null;
       period_start?: string;
       period_end?: string;
       enabled: boolean;
@@ -129,6 +130,7 @@ declare namespace Api {
       quota_type: string;
       total_limit: number;
       cycle: string;
+      channel_id?: number | null;
     }
   }
 
