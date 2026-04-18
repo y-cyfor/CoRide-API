@@ -13,11 +13,11 @@ export function fetchDeleteBlacklist(id: number) {
 
 // Whitelist
 export function fetchUserWhitelist(userId: number) {
-  return request<Api.IpAccess.WhitelistEntry[]>({ url: `/admin/ip/whitelist/${userId}`, method: 'get' });
+  return request<Api.IpAccess.WhitelistEntry[]>({ url: `/admin/ip/whitelist/user/${userId}`, method: 'get' });
 }
 export function fetchAddWhitelist(data: Api.IpAccess.AddWhitelistParams) {
   return request<{ id: number }>({ url: '/admin/ip/whitelist', method: 'post', data });
 }
 export function fetchDeleteWhitelist(id: number) {
-  return request<{ deleted: boolean }>({ url: `/admin/ip/whitelist/${id}`, method: 'delete' });
+  return request<{ deleted: boolean }>({ url: `/admin/ip/whitelist/entry/${id}`, method: 'delete' });
 }
