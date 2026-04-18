@@ -55,6 +55,7 @@ fn build_headers(
     // Authorization
     if channel_type == "anthropic" {
         headers.insert("x-api-key".to_string(), api_key.to_string());
+        headers.insert("anthropic-beta".to_string(), "prompt-caching-2024-07-31".to_string());
     } else {
         headers.insert("Authorization".to_string(), format!("Bearer {}", api_key));
     }
