@@ -13,7 +13,7 @@ use tracing_subscriber::EnvFilter;
 
 use coride_api::config;
 use coride_api::db::{self, models};
-use coride_api::middleware::{admin_auth, auth, rate_limit, user_auth};
+use coride_api::middleware::{admin_auth, auth, ip_filter, rate_limit, user_auth};
 use coride_api::router::{admin_routes, proxy_routes};
 use coride_api::state::app_state as state_builder;
 use coride_api::AppState;
@@ -71,7 +71,8 @@ async fn main() {
         .route("/v1/models", get(proxy_routes::list_models))
         .route("/v1/user/info", get(proxy_routes::user_info))
         .layer(from_fn_with_state(state.clone(), auth::auth_middleware))
-        .layer(from_fn_with_state(state.clone(), rate_limit::rate_limit_middleware));
+        .layer(from_fn_with_state(state.clone(), rate_limit::rate_limit_middleware))
+        .layer(from_fn_with_state(state.clone(), ip_filter::ip_filter));
 
     // 9. Build admin routes
     let admin_public = Router::new()

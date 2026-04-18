@@ -711,6 +711,48 @@ pub async fn increment_channel_quota(
     Ok(())
 }
 
+/// Check if an IP is in the global blacklist.
+pub async fn is_ip_blacklisted(pool: &SqlitePool, ip: &str) -> Result<bool, sqlx::Error> {
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM ip_blacklist WHERE ip_address = ?",
+    )
+    .bind(ip)
+    .fetch_one(pool)
+    .await?;
+    Ok(count > 0)
+}
+
+/// Check if a user has an IP whitelist and if the given IP is in it.
+/// Returns Ok(true) if whitelist exists and IP matches.
+/// Returns Ok(false) if whitelist exists but IP doesn't match.
+/// Returns Ok(None) if user has no whitelist (no restriction).
+pub async fn check_user_ip_whitelist(
+    pool: &SqlitePool,
+    user_id: i64,
+    ip: &str,
+) -> Result<Option<bool>, sqlx::Error> {
+    let has_whitelist: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM ip_whitelist WHERE user_id = ?",
+    )
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+
+    if has_whitelist == 0 {
+        return Ok(None);
+    }
+
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM ip_whitelist WHERE user_id = ? AND ip_address = ?",
+    )
+    .bind(user_id)
+    .bind(ip)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(Some(count > 0))
+}
+
 // === AppProfile CRUD ===
 
 pub async fn get_app_profile_by_id(pool: &SqlitePool, id: i64) -> Result<Option<AppProfile>, sqlx::Error> {
