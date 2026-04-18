@@ -27,7 +27,7 @@ const formModel = ref<Partial<Api.Quota.CreateQuotaParams & { total_limit: numbe
 });
 
 const userOptions = ref<{ label: string; value: number }[]>([]);
-const channelOptions = ref<{ label: string; value: number | null }[]>([]);
+const channelOptions = ref<{ label: string; value: number }[]>([]);
 const channels = ref<Map<number, string>>(new Map());
 
 const quotaTypeOptions = [
@@ -54,7 +54,7 @@ async function loadUsers() {
 async function loadChannels() {
   const { data } = await fetchChannelList(1, 100);
   if (data) {
-    channelOptions.value = [{ label: '全部（用户级配额）', value: null }, ...data.map(c => ({ label: c.name, value: c.id }))];
+    channelOptions.value = [{ label: '全部（用户级配额）', value: 0 }, ...data.map(c => ({ label: c.name, value: c.id }))];
     channels.value = new Map(data.map((c: Api.Channel.Channel) => [c.id, c.name]));
   }
 }
@@ -94,7 +94,7 @@ async function loadData() {
 function handleCreate() {
   isEdit.value = false;
   editingId.value = null;
-  formModel.value = { user_id: undefined as unknown as number, quota_type: 'tokens', total_limit: 0, cycle: 'daily', channel_id: null };
+  formModel.value = { user_id: undefined as unknown as number, quota_type: 'tokens', total_limit: 0, cycle: 'daily', channel_id: 0 as number | undefined };
   showModal.value = true;
 }
 
@@ -117,7 +117,12 @@ async function handleSave() {
       message.warning('请选择用户');
       return;
     }
-    const res = await fetchCreateQuota(formModel.value as Api.Quota.CreateQuotaParams);
+    // Convert channel_id 0 (user-level) to undefined so backend receives null
+    const payload = { ...formModel.value };
+    if (payload.channel_id === 0) {
+      payload.channel_id = undefined as any;
+    }
+    const res = await fetchCreateQuota(payload as Api.Quota.CreateQuotaParams);
     error = res.error;
   }
 
