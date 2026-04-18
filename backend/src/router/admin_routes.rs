@@ -512,6 +512,51 @@ pub async fn test_channel(
     }
 }
 
+/// GET /admin/channels/{id}/stats — detailed usage stats for a single channel
+pub async fn channel_stats(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<i64>,
+) -> Response {
+    let pool = &state.db;
+
+    // Verify channel exists
+    match models::get_channel_by_id(pool, id).await {
+        Ok(None) => return error_response(StatusCode::NOT_FOUND, "Channel not found"),
+        Err(e) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+        _ => {}
+    }
+
+    // Total stats
+    let total_stats: Option<(i64, i64)> = sqlx::query_as(
+        "SELECT COUNT(*), COALESCE(SUM(total_tokens), 0) FROM request_logs WHERE channel_id = ?",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten();
+
+    // Today stats
+    let today_stats: Option<(i64, i64)> = sqlx::query_as(
+        "SELECT COUNT(*), COALESCE(SUM(total_tokens), 0) FROM request_logs WHERE channel_id = ? AND created_at >= datetime('now', 'start of day')",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten();
+
+    let (total_req, total_tok) = total_stats.unwrap_or((0, 0));
+    let (today_req, today_tok) = today_stats.unwrap_or((0, 0));
+
+    ok_response(serde_json::json!({
+        "total_requests": total_req,
+        "total_tokens": total_tok,
+        "today_requests": today_req,
+        "today_tokens": today_tok,
+    }))
+}
+
 // === Model endpoints ===
 
 pub async fn list_models_endpoint(

@@ -105,6 +105,7 @@ async fn main() {
         .route("/admin/channels/{id}", put(admin_routes::update_channel))
         .route("/admin/channels/{id}", delete(admin_routes::delete_channel_endpoint))
         .route("/admin/channels/{id}/test", post(admin_routes::test_channel))
+        .route("/admin/channels/{id}/stats", get(admin_routes::channel_stats))
         // Models
         .route("/admin/models", get(admin_routes::list_models_endpoint))
         .route("/admin/models", post(admin_routes::create_model_endpoint))
