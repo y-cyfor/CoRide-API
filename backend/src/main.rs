@@ -77,7 +77,9 @@ async fn main() {
     // 9. Build admin routes
     let admin_public = Router::new()
         // Auth (public)
-        .route("/admin/auth/login", post(admin_routes::login));
+        .route("/admin/auth/login", post(admin_routes::login))
+        .route("/admin/auth/refresh", post(admin_routes::refresh_token))
+        .layer(from_fn_with_state(state.clone(), rate_limit::login_rate_limit_middleware));
 
     // User-facing routes (JWT auth, not admin-only)
     let user_routes = Router::new()

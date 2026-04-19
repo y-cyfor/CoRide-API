@@ -24,6 +24,11 @@ pub struct LoginRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct RefreshTokenRequest {
+    pub refresh_token: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct CreateUserRequest {
     pub username: String,
     pub password: String,
@@ -216,6 +221,10 @@ pub async fn login(
         Ok(None) | Err(_) => return error_response(StatusCode::UNAUTHORIZED, "Invalid username or password"),
     };
 
+    if user.status != "active" {
+        return error_response(StatusCode::UNAUTHORIZED, "User account is disabled");
+    }
+
     if bcrypt::verify(&req.password, &user.password_hash).unwrap_or(false) {
         let token = match crate::utils::jwt::generate_token(
             user.id,
@@ -227,8 +236,20 @@ pub async fn login(
             Ok(t) => t,
             Err(e) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Token generation failed: {}", e)),
         };
+        // Generate refresh token (7 days expiry)
+        let refresh_token = match crate::utils::jwt::generate_token(
+            user.id,
+            &user.username,
+            &user.role,
+            &state.config.jwt.secret,
+            7 * 24 * 3600, // 7 days
+        ) {
+            Ok(t) => t,
+            Err(e) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Refresh token generation failed: {}", e)),
+        };
         return ok_response(serde_json::json!({
             "token": token,
+            "refreshToken": refresh_token,
             "user": {
                 "id": user.id,
                 "username": user.username,
@@ -238,6 +259,48 @@ pub async fn login(
     }
 
     error_response(StatusCode::UNAUTHORIZED, "Invalid username or password")
+}
+
+pub async fn refresh_token(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<RefreshTokenRequest>,
+) -> Response {
+    // Verify refresh token
+    let claims = match crate::utils::jwt::verify_token(&req.refresh_token, &state.config.jwt.secret) {
+        Ok(c) => c,
+        Err(_) => return error_response(StatusCode::UNAUTHORIZED, "Invalid refresh token"),
+    };
+
+    // Check user is still active
+    let user = match models::get_user_by_id(&state.db, claims.user_id).await {
+        Ok(Some(u)) => u,
+        _ => return error_response(StatusCode::UNAUTHORIZED, "User not found or disabled"),
+    };
+    if user.status != "active" {
+        return error_response(StatusCode::UNAUTHORIZED, "User account is disabled");
+    }
+
+    // Generate new access token
+    let token = match crate::utils::jwt::generate_token(
+        user.id,
+        &user.username,
+        &user.role,
+        &state.config.jwt.secret,
+        state.config.jwt.expires_in as i64,
+    ) {
+        Ok(t) => t,
+        Err(e) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Token generation failed: {}", e)),
+    };
+
+    ok_response(serde_json::json!({
+        "token": token,
+        "refreshToken": req.refresh_token, // return same refresh token
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role,
+        }
+    }))
 }
 
 pub async fn get_me(
@@ -272,6 +335,12 @@ pub async fn list_users(
     let page = pagination.page.unwrap_or(1);
     let page_size = pagination.page_size.unwrap_or(20);
 
+    // Get total count
+    let total: i64 = match sqlx::query_scalar("SELECT COUNT(*) FROM users").fetch_one(pool).await {
+        Ok(t) => t,
+        Err(e) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    };
+
     match models::list_users(pool, page, page_size).await {
         Ok(users) => {
             // Enrich each user with their quota usage info
@@ -294,7 +363,10 @@ pub async fn list_users(
                 }
                 result.push(obj);
             }
-            ok_response(result)
+            ok_response(serde_json::json!({
+                "items": result,
+                "total": total,
+            }))
         }
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
     }
@@ -414,6 +486,12 @@ pub async fn create_channel(
     State(state): State<Arc<AppState>>,
     Json(req): Json<CreateChannelRequest>,
 ) -> Response {
+    if let Some(timeout) = req.timeout {
+        if timeout < 0 {
+            return error_response(StatusCode::BAD_REQUEST, "Timeout cannot be negative");
+        }
+    }
+
     let pool = &state.db;
     match models::create_channel(
         pool, &req.name, &req.r#type, &req.base_url, &req.api_keys,
@@ -589,8 +667,16 @@ pub async fn list_models_endpoint(
     let page = pagination.page.unwrap_or(1);
     let page_size = pagination.page_size.unwrap_or(20);
 
+    let total: i64 = match sqlx::query_scalar("SELECT COUNT(*) FROM models").fetch_one(pool).await {
+        Ok(t) => t,
+        Err(e) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    };
+
     match models::list_models(pool, page, page_size).await {
-        Ok(models_list) => ok_response(models_list),
+        Ok(models_list) => ok_response(serde_json::json!({
+            "items": models_list,
+            "total": total,
+        })),
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
     }
 }
@@ -627,8 +713,16 @@ pub async fn list_quotas(
     let page = pagination.page.unwrap_or(1);
     let page_size = pagination.page_size.unwrap_or(20);
 
+    let total: i64 = match sqlx::query_scalar("SELECT COUNT(*) FROM quotas").fetch_one(pool).await {
+        Ok(t) => t,
+        Err(e) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    };
+
     match models::list_quotas(pool, pagination.user_id, page, page_size).await {
-        Ok(quotas) => ok_response(quotas),
+        Ok(quotas) => ok_response(serde_json::json!({
+            "items": quotas,
+            "total": total,
+        })),
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
     }
 }
@@ -637,6 +731,10 @@ pub async fn create_quota(
     State(state): State<Arc<AppState>>,
     Json(req): Json<CreateQuotaRequest>,
 ) -> Response {
+    if req.total_limit < 0 {
+        return error_response(StatusCode::BAD_REQUEST, "Total limit cannot be negative");
+    }
+
     let pool = &state.db;
     let (period_start, period_end) = crate::service::quota::init_quota_period(&req.cycle);
 
@@ -722,8 +820,16 @@ pub async fn list_app_profiles(
     let page = pagination.page.unwrap_or(1);
     let page_size = pagination.page_size.unwrap_or(20);
 
+    let total: i64 = match sqlx::query_scalar("SELECT COUNT(*) FROM app_profiles").fetch_one(pool).await {
+        Ok(t) => t,
+        Err(e) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    };
+
     match models::list_app_profiles(pool, page, page_size).await {
-        Ok(profiles) => ok_response(profiles),
+        Ok(profiles) => ok_response(serde_json::json!({
+            "items": profiles,
+            "total": total,
+        })),
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
     }
 }
@@ -873,6 +979,12 @@ pub async fn update_channel(
     Path(id): Path<i64>,
     Json(req): Json<UpdateChannelRequest>,
 ) -> Response {
+    if let Some(timeout) = req.timeout {
+        if timeout < 0 {
+            return error_response(StatusCode::BAD_REQUEST, "Timeout cannot be negative");
+        }
+    }
+
     let pool = &state.db;
     let current: Option<(String, String, String, String, Option<String>, i32, i32, i32, Option<String>, Option<i64>, Option<String>, Option<i64>, String)> =
         sqlx::query_as("SELECT name, type, base_url, api_keys, custom_headers, weight, timeout, retry_count, quota_type, quota_limit, quota_cycle, app_profile_id, status FROM channels WHERE id = ?")
@@ -957,6 +1069,12 @@ pub async fn update_quota(
     Path(id): Path<i64>,
     Json(req): Json<UpdateQuotaRequest>,
 ) -> Response {
+    if let Some(limit) = req.total_limit {
+        if limit < 0 {
+            return error_response(StatusCode::BAD_REQUEST, "Total limit cannot be negative");
+        }
+    }
+
     let pool = &state.db;
     // update_quota only changes total_limit and enabled flag
     let current: Option<(i64, bool)> =

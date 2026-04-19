@@ -256,22 +256,24 @@ async function deleteGlobalPlan() {
 }
 
 // Channel plan editing
-function editChannelPlan(channelId: number) {
+function editChannelPlan(channelId: number | null) {
   editingChannelId.value = channelId;
-  const plan = channelPlans.value.find(p => p.channel_id === channelId);
-  if (plan) {
-    const groups = new Map<string, EditingTimeSlot[]>();
-    for (const s of plan.slots) {
-      const key = `${s.start_hour}-${s.end_hour}`;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push({ id: s.id, start_hour: s.start_hour, end_hour: s.end_hour, apps: [{ app_profile_id: s.app_profile_id, weight: s.weight }] });
+  if (channelId) {
+    const plan = channelPlans.value.find(p => p.channel_id === channelId);
+    if (plan) {
+      const groups = new Map<string, EditingTimeSlot[]>();
+      for (const s of plan.slots) {
+        const key = `${s.start_hour}-${s.end_hour}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push({ id: s.id, start_hour: s.start_hour, end_hour: s.end_hour, apps: [{ app_profile_id: s.app_profile_id, weight: s.weight }] });
+      }
+      channelSlotData.value = Array.from(groups.entries()).map(([key, slots], idx) => ({
+        id: idx + 1,
+        start_hour: slots[0].start_hour,
+        end_hour: slots[0].end_hour,
+        apps: slots.map(s => s.apps[0])
+      }));
     }
-    channelSlotData.value = Array.from(groups.entries()).map(([key, slots], idx) => ({
-      id: idx + 1,
-      start_hour: slots[0].start_hour,
-      end_hour: slots[0].end_hour,
-      apps: slots.map(s => s.apps[0])
-    }));
   } else {
     channelSlotData.value = [];
   }
@@ -297,7 +299,10 @@ function removeAppFromChannelSlot(slot: EditingTimeSlot, appIdx: number) {
 }
 
 async function saveChannelPlan() {
-  if (!editingChannelId.value) return;
+  if (!editingChannelId.value) {
+    message.warning('请选择要配置方案的渠道');
+    return;
+  }
   if (channelSlotData.value.length === 0) {
     message.warning('请至少添加一个时段');
     return;
@@ -435,7 +440,7 @@ onMounted(() => {
     <!-- Channel Plans -->
     <NCard title="渠道方案" :bordered="false" class="card-wrapper">
       <template #header-extra>
-        <NButton size="small" type="primary" @click="editChannelPlan(-1)">新增渠道方案</NButton>
+        <NButton size="small" type="primary" @click="editChannelPlan(null)">新增渠道方案</NButton>
       </template>
 
       <NDataTable

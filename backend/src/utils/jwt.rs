@@ -27,10 +27,12 @@ pub fn generate_token(user_id: i64, username: &str, role: &str, secret: &str, ex
 }
 
 pub fn verify_token(token: &str, secret: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
+    let mut validation = Validation::default();
+    validation.algorithms = vec![jsonwebtoken::Algorithm::HS256];
     let token_data = decode::<Claims>(
         token,
         &DecodingKey::from_secret(secret.as_bytes()),
-        &Validation::default(),
+        &validation,
     )?;
 
     Ok(token_data.claims)

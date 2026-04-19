@@ -26,4 +26,6 @@ pub struct AppState {
     pub channel_rate_limiters: DashMap<i64, Arc<GovernorLimiter<NotKeyed, InMemoryState, DefaultClock, NoOpMiddleware>>>,
     pub user_rate_limiters: DashMap<String, Arc<GovernorLimiter<NotKeyed, InMemoryState, DefaultClock, NoOpMiddleware>>>,
     pub http_client: reqwest::Client,
+    /// Per-IP rate limiters for login endpoint (5 attempts per minute).
+    pub login_rate_limiters: DashMap<String, Arc<GovernorLimiter<NotKeyed, InMemoryState, DefaultClock, NoOpMiddleware>>>,
 }

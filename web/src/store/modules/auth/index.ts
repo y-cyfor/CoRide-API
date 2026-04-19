@@ -130,6 +130,9 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
   async function loginByToken(loginToken: Api.Auth.LoginToken) {
     // 1. stored in the localStorage, the later requests need it in headers
     localStg.set('token', loginToken.token);
+    if (loginToken.refreshToken) {
+      localStg.set('refreshToken', loginToken.refreshToken);
+    }
 
     // 2. set user info from login response
     if (loginToken.user) {

@@ -12,10 +12,32 @@ export function getAuthorization() {
 
 /** refresh token */
 async function handleRefreshToken() {
-  const { resetStore } = useAuthStore();
+  const refreshToken = localStg.get('refreshToken');
+  if (!refreshToken) {
+    const { resetStore } = useAuthStore();
+    resetStore();
+    return false;
+  }
 
-  resetStore();
-  return false;
+  try {
+    const { data, error } = await fetchRefreshToken(refreshToken);
+    if (error || !data) {
+      const { resetStore } = useAuthStore();
+      resetStore();
+      return false;
+    }
+
+    // Update tokens
+    localStg.set('token', data.token);
+    if (data.refreshToken) {
+      localStg.set('refreshToken', data.refreshToken);
+    }
+    return true;
+  } catch {
+    const { resetStore } = useAuthStore();
+    resetStore();
+    return false;
+  }
 }
 
 export async function handleExpiredRequest(state: RequestInstanceState) {

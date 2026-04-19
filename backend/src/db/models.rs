@@ -623,13 +623,14 @@ pub async fn delete_quota(pool: &SqlitePool, id: i64) -> Result<(), sqlx::Error>
     Ok(())
 }
 
-pub async fn increment_quota_used(pool: &SqlitePool, quota_id: i64, amount: i64) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE quotas SET used = used + ? WHERE id = ?")
+pub async fn increment_quota_used(pool: &SqlitePool, quota_id: i64, amount: i64) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query("UPDATE quotas SET used = used + ? WHERE id = ? AND used + ? <= total_limit")
         .bind(amount)
         .bind(quota_id)
+        .bind(amount)
         .execute(pool)
         .await?;
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }
 
 pub async fn reset_quota_if_cycle_expired(pool: &SqlitePool, quota_id: i64) -> Result<(), sqlx::Error> {
@@ -702,15 +703,16 @@ pub async fn increment_channel_quota(
     pool: &SqlitePool,
     channel_id: i64,
     amount: i64,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "UPDATE channels SET quota_used = quota_used + ? WHERE id = ?",
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        "UPDATE channels SET quota_used = quota_used + ? WHERE id = ? AND quota_limit IS NOT NULL AND quota_used + ? <= quota_limit",
     )
     .bind(amount)
     .bind(channel_id)
+    .bind(amount)
     .execute(pool)
     .await?;
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }
 
 /// Check if an IP is in the global blacklist.

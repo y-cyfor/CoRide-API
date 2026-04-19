@@ -16,7 +16,19 @@ const editingId = ref<number | null>(null);
 const pagination = ref({
   page: 1,
   pageSize: 20,
-  itemCount: 0
+  itemCount: 0,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50],
+  prefix: ({ itemCount }: { itemCount: number }) => `共 ${itemCount} 条`,
+  onChange: (page: number) => {
+    pagination.value.page = page;
+    loadData();
+  },
+  onUpdatePageSize: (pageSize: number) => {
+    pagination.value.pageSize = pageSize;
+    pagination.value.page = 1;
+    loadData();
+  }
 });
 
 const showModal = ref(false);
@@ -85,8 +97,13 @@ async function loadData() {
   loading.value = true;
   const { data, error } = await fetchQuotaList(pagination.value.page, pagination.value.pageSize);
   if (!error && data) {
-    quotas.value = data;
-    pagination.value.itemCount = data.length;
+    if (data.items && data.total !== undefined) {
+      quotas.value = data.items;
+      pagination.value.itemCount = data.total;
+    } else {
+      quotas.value = Array.isArray(data) ? data : [];
+      pagination.value.itemCount = quotas.value.length;
+    }
   }
   loading.value = false;
 }
@@ -171,6 +188,7 @@ onMounted(() => {
         :data="quotas"
         :loading="loading"
         :pagination="pagination"
+        :remote="true"
         :row-key="(row: Api.Quota.Quota) => row.id"
       />
     </NCard>

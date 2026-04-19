@@ -37,6 +37,7 @@ pub async fn build(cfg: AppConfig, db: sqlx::SqlitePool) -> Arc<AppState> {
         channel_rate_limiters: DashMap::new(),
         user_rate_limiters: DashMap::new(),
         http_client,
+        login_rate_limiters: DashMap::new(),
     })
 }
 

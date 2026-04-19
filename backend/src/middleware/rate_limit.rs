@@ -2,11 +2,16 @@ use std::sync::Arc;
 
 use axum::{
     body::Body,
-    extract::{Request, State},
+    extract::{ConnectInfo, Request, State},
     http::{header, StatusCode},
     middleware::Next,
     response::Response,
 };
+use governor::Quota;
+use governor::middleware::NoOpMiddleware;
+use governor::state::InMemoryState;
+use governor::clock::DefaultClock;
+use governor::RateLimiter as GovernorLimiter;
 use serde_json::json;
 use thiserror::Error;
 
@@ -87,5 +92,42 @@ pub async fn rate_limit_middleware(
 
 /// Global counter for active concurrent requests.
 static ACTIVE_REQUESTS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+/// Per-IP rate limiting middleware for the login endpoint.
+/// Allows 5 login attempts per minute per IP address.
+pub async fn login_rate_limit_middleware(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<std::net::SocketAddr>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    let ip = addr.ip().to_string();
+
+    // Get or create per-IP limiter (5 attempts per minute)
+    let limiter = state.login_rate_limiters
+        .entry(ip.clone())
+        .or_insert_with(|| {
+            let non_zero = std::num::NonZeroU32::new(5).unwrap();
+            Arc::new(GovernorLimiter::<_, InMemoryState, DefaultClock, NoOpMiddleware>::direct(
+                Quota::per_minute(non_zero),
+            ))
+        })
+        .clone();
+
+    if limiter.check().is_err() {
+        let body = json!({
+            "code": 429,
+            "message": "Too many login attempts. Please try again later.",
+            "data": null,
+        });
+        return Response::builder()
+            .status(StatusCode::TOO_MANY_REQUESTS)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap();
+    }
+
+    next.run(request).await
+}
 
 // Use `axum::middleware::from_fn_with_state(state, rate_limit_middleware)` directly in router setup.

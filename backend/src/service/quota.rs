@@ -48,6 +48,7 @@ pub async fn check_user_quota(
 
 /// Deduct user quota for a specific channel after a successful request.
 /// Only deducts from the applicable quota (channel-level or user-level).
+/// Returns Ok(()) if deducted successfully, or Exceeded if quota would be exceeded.
 pub async fn deduct_user_quota(
     pool: &SqlitePool,
     user_id: i64,
@@ -61,10 +62,16 @@ pub async fn deduct_user_quota(
 
     match quota.quota_type.as_str() {
         "requests" => {
-            models::increment_quota_used(pool, quota.id, 1).await?;
+            let ok = models::increment_quota_used(pool, quota.id, 1).await?;
+            if !ok {
+                return Err(QuotaError::Exceeded(format!("{} requests", quota.total_limit)));
+            }
         }
         "tokens" => {
-            models::increment_quota_used(pool, quota.id, tokens as i64).await?;
+            let ok = models::increment_quota_used(pool, quota.id, tokens as i64).await?;
+            if !ok {
+                return Err(QuotaError::Exceeded(format!("{} tokens", quota.total_limit)));
+            }
         }
         _ => {}
     }
@@ -138,7 +145,10 @@ async fn reset_channel_quota_if_expired(pool: &SqlitePool, channel_id: i64) -> R
 
 /// Deduct channel quota after a successful request.
 pub async fn deduct_channel_quota(pool: &SqlitePool, channel_id: i64, tokens: i32) -> Result<(), QuotaError> {
-    models::increment_channel_quota(pool, channel_id, tokens as i64).await?;
+    let ok = models::increment_channel_quota(pool, channel_id, tokens as i64).await?;
+    if !ok {
+        return Err(QuotaError::Exceeded("channel quota".to_string()));
+    }
     Ok(())
 }
 

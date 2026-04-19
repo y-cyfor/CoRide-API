@@ -22,7 +22,19 @@ const newWhitelistIp = ref('');
 const pagination = ref({
   page: 1,
   pageSize: 20,
-  itemCount: 0
+  itemCount: 0,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50],
+  prefix: ({ itemCount }: { itemCount: number }) => `共 ${itemCount} 条`,
+  onChange: (page: number) => {
+    pagination.value.page = page;
+    loadData();
+  },
+  onUpdatePageSize: (pageSize: number) => {
+    pagination.value.pageSize = pageSize;
+    pagination.value.page = 1;
+    loadData();
+  }
 });
 
 const showModal = ref(false);
@@ -342,6 +354,7 @@ onMounted(() => {
         :data="users"
         :loading="loading"
         :pagination="pagination"
+        :remote="true"
         :row-key="(row: Api.User.User) => row.id"
       />
     </NCard>
