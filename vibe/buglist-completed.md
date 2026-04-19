@@ -749,12 +749,217 @@ async function loadChannels() {
 
 ---
 
+## 十三、2026-04-20 新增修复
+
+### 1. CSV 导出缺少认证 token ✅
+
+**问题描述：**
+- `exportLogsCsv()` 使用原生 `fetch` 而没有携带 JWT token，导致 401 错误
+- CSV 导出功能完全不工作
+
+**修复方案：**
+- 添加 Authorization header，从 localStorage 读取 token
+- 清理 token 中的引号字符
+
+**涉及文件：** `web/src/service/api/log.ts:22-34`
+
+---
+
+### 2. update_quota 强制启用 ✅
+
+**问题描述：**
+- `let enabled = true;` 更新操作强制将 `enabled` 设为 `true`
+- 无法通过 API 禁用配额
+
+**修复方案：**
+- `UpdateQuotaRequest` 添加 `enabled` 字段
+- 使用 `req.enabled.unwrap_or_else(...)` 保持当前值
+
+**涉及文件：** `backend/src/router/admin_routes.rs:1116`
+
+---
+
+### 3. update_model 忽略 enabled 和 is_default 字段 ✅
+
+**问题描述：**
+- `enabled` 和 `is_default` 始终使用当前值，请求体中没有对应字段
+- 这些字段无法通过 API 更新
+
+**修复方案：**
+- `UpdateModelRequest` 添加 `enabled` 和 `is_default` 字段
+- 使用 `req.enabled.unwrap_or(e)` 和 `req.is_default.unwrap_or(d)`
+
+**涉及文件：** `backend/src/router/admin_routes.rs:1069-1070`
+
+---
+
+### 4. update_app_profile 无法启用/禁用 ✅
+
+**问题描述：**
+- `enabled` 始终取自当前值，请求体中没有对应字段
+- 应用预设无法通过 API 启用/禁用
+
+**修复方案：**
+- `UpdateAppProfileRequest` 添加 `enabled` 字段
+- 使用 `req.enabled.unwrap_or(en)` 保持当前值
+
+**涉及文件：** `backend/src/router/admin_routes.rs:1173`
+
+---
+
+### 5. 无效状态码映射为 200 OK ✅
+
+**问题描述：**
+- `StatusCode::from_u16(result.status_code).unwrap_or(StatusCode::OK)`
+- 上游返回无效状态码（如 0、999）时错误地表示响应成功
+
+**修复方案：**
+- 改为 `unwrap_or(StatusCode::BAD_GATEWAY)`
+
+**涉及文件：** `backend/src/router/proxy_routes.rs:302`
+
+---
+
+### 6. 数据库宕机显示"用户名或密码错误" ✅
+
+**问题描述：**
+- `Ok(None) | Err(_) => return error_response(UNAUTHORIZED, "Invalid username or password")`
+- 数据库不可用时返回误导性错误信息
+
+**修复方案：**
+- 区分 `Ok(None)`（用户名密码错误 401）和 `Err(e)`（数据库错误 500）
+
+**涉及文件：** `backend/src/router/admin_routes.rs:224-229`
+
+---
+
+### 7. IP 过滤器在认证之后执行 ✅
+
+**问题描述：**
+- Axum layer 反向执行顺序：`auth` → `rate_limit` → `ip_filter`
+- 全局黑名单检查在认证之后，恶意 IP 已到达认证层
+
+**修复方案：**
+- 调整 layer 顺序为 `auth` → `rate_limit` → `ip_filter`
+- axum layer 从后往前执行，ip_filter 放最后 = 最先执行
+
+**涉及文件：** `backend/src/main.rs:73-75`
+
+---
+
+### 8. 渠道测试失败无反馈 ✅
+
+**问题描述：**
+- 测试失败时虽然有处理，但用户界面反馈不够明确
+
+**修复方案：**
+- catch 块添加 error 提示显示错误信息
+- 对不同 HTTP 状态码给出友好提示
+
+**涉及文件：** `web/src/views/upstream/channel/index.vue:263-266`
+
+---
+
+### 9. enabled_models JSON 解析失败静默清空 ✅
+
+**问题描述：**
+- `try { enabledModels = JSON.parse(row.enabled_models); } catch { /* ignore */ }`
+- 数据库中格式异常时用户的模型绑定配置被静默清空
+
+**修复方案：**
+- catch 块添加 warning 提示告知用户配置异常
+
+**涉及文件：** `web/src/views/control/user/index.vue:252-254`
+
+---
+
+### 10. 模型列表硬编码加载 1000 条 ✅
+
+**问题描述：**
+- `fetchModelList(1, 1000)` 加载 1000 条模型数据到内存
+- 内存占用过高
+
+**修复方案：**
+- 所有 `fetchModelList(1, 1000)` 改为 `fetchModelList(1, 200)`
+
+**涉及文件：** 多个前端文件
+
+---
+
+### 11. tooltipRecord 键值映射错乱 ✅
+
+**问题描述：**
+- `left → right`、`right → unFixed`、`unFixed → left` 映射错误
+- tooltip 文本与实际状态不匹配
+
+**修复方案：**
+- 更正为 `left→left, right→right, unFixed→unFixed`
+
+**涉及文件：** `web/src/components/advanced/table-column-setting.vue:14-18`
+
+---
+
+### 12. i18n fallbackLocale 配置不匹配 ✅
+
+**问题描述：**
+- `fallbackLocale: 'en'` 但可用 locale 是 `'zh-CN'` 和 `'en-US'`
+- 可能无法正确解析到 `'en-US'`
+
+**修复方案：**
+- 改为 `fallbackLocale: 'en-US'`
+
+**涉及文件：** `web/src/locales/index.ts:8`
+
+---
+
+### 13. CORS 允许所有来源 ✅
+
+**问题描述：**
+- `allow_origin(Any)` 任意域名可发起请求
+- 任何网站都可以向此 API 发起跨域请求
+
+**修复方案：**
+- 配置文件添加 `cors_allowed_origins` 字段
+- 支持配置允许的域名列表，未配置时保持向后兼容
+
+**涉及文件：** `backend/src/main.rs:166-214`、`backend/src/config.rs:19`
+
+---
+
+### 14. API Keys 明文存储 ✅
+
+**问题描述：**
+- 渠道 API Key 在 SQLite 数据库中完全明文存储
+- 数据库文件泄露 = 所有上游服务商 Key 泄露
+
+**修复方案：**
+- 默认启用 AES-256-GCM 加密
+- 密钥从 `CORIDE_JWT_SECRET` 派生（SHA-256）
+- 写入时自动加密、读取时自动解密
+
+**涉及文件：** `backend/src/utils/encrypt.rs`（新建）、`backend/src/db/models.rs:7-14`、`backend/src/lib.rs:31-32`
+
+---
+
+### 15. 创建模型默认选最后一个渠道 ✅
+
+**问题描述：**
+- `handleCreate` 中 `channel_id` 默认选中最后一个渠道
+- ID 最大的渠道不一定是用户想要的
+
+**修复方案：**
+- `channel_id` 初始化为 `0`，用户需手动选择渠道
+
+**涉及文件：** `web/src/views/upstream/model/index.vue:168`
+
+---
+
 ## 最终统计
 
 | 类别 | 数量 |
 |------|------|
-| 已修复 | 56 |
+| 已修复 | 71 |
 | 未修复（设计如此） | 11 |
-| 未修复（暂不实施） | 5 |
+| 未修复（暂不实施） | 13 |
 | 未修复（影响极小） | 1 |
-| **缺陷总计** | **73** |
+| **缺陷总计** | **96** |
