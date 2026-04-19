@@ -48,7 +48,7 @@ const columns: DataTableColumns<Api.UserKey.UserKey> = [
 ];
 
 async function loadModelOptions() {
-  const { data } = await fetchModelList(1, 1000);
+  const { data } = await fetchModelList(1, 200);
   if (data) {
     const items = Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : []);
     modelOptions.value = items.map((m: any) => ({ label: m.proxy_name, value: m.proxy_name }));

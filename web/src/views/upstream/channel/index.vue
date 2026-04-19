@@ -260,8 +260,9 @@ async function handleTest(row: Api.Channel.Channel) {
         message.info(`测试结果: ${data?.status || '未知'}`);
       }
     }
-  } catch {
+  } catch (e: any) {
     loadingMsg.destroy();
+    message.error(`渠道测试失败: ${e?.message || '未知错误'}`);
   }
 }
 

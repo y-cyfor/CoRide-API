@@ -293,7 +293,7 @@ async fn handle_proxy(
                             }
 
                             return (
-                                StatusCode::from_u16(result.status_code).unwrap_or(StatusCode::OK),
+                                StatusCode::from_u16(result.status_code).unwrap_or(StatusCode::BAD_GATEWAY),
                                 result.body,
                             )
                                 .into_response();

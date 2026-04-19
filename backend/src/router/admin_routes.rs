@@ -144,6 +144,8 @@ pub struct UpdateModelRequest {
     pub channel_id: Option<i64>,
     pub source_name: Option<String>,
     pub proxy_name: Option<String>,
+    pub enabled: Option<bool>,
+    pub is_default: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -151,6 +153,7 @@ pub struct UpdateQuotaRequest {
     pub quota_type: Option<String>,
     pub total_limit: Option<i64>,
     pub cycle: Option<String>,
+    pub enabled: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -169,6 +172,7 @@ pub struct UpdateAppProfileRequest {
     pub user_agent: Option<String>,
     pub extra_headers: Option<String>,
     pub description: Option<String>,
+    pub enabled: Option<bool>,
 }
 
 // === Response helper ===
@@ -218,7 +222,11 @@ pub async fn login(
     let pool = &state.db;
     let user = match models::get_user_by_username(pool, &req.username).await {
         Ok(Some(u)) => u,
-        Ok(None) | Err(_) => return error_response(StatusCode::UNAUTHORIZED, "Invalid username or password"),
+        Ok(None) => return error_response(StatusCode::UNAUTHORIZED, "Invalid username or password"),
+        Err(e) => {
+            tracing::error!(error = %e, "Database error during login");
+            return error_response(StatusCode::INTERNAL_SERVER_ERROR, "Internal server error");
+        }
     };
 
     if user.status != "active" {
@@ -1043,7 +1051,8 @@ pub async fn update_model(
             req.channel_id.unwrap_or(c),
             req.source_name.unwrap_or(s),
             req.proxy_name.unwrap_or(p),
-            e, d,
+            req.enabled.unwrap_or(e),
+            req.is_default.unwrap_or(d),
         ),
         None => return error_response(StatusCode::NOT_FOUND, "Model not found"),
     };
@@ -1089,7 +1098,7 @@ pub async fn update_quota(
         Some((t, _)) => req.total_limit.unwrap_or(t),
         None => return error_response(StatusCode::NOT_FOUND, "Quota not found"),
     };
-    let enabled = true; // keep enabled on update
+    let enabled = req.enabled.unwrap_or_else(|| current.map(|(_, e)| e).unwrap_or(true));
 
     match models::update_quota(pool, id, total_limit, enabled).await {
         Ok(()) => ok_response(serde_json::json!({ "updated": true })),
@@ -1146,7 +1155,7 @@ pub async fn update_app_profile(
             req.user_agent.unwrap_or(u),
             req.extra_headers.or(e),
             req.description.or(d),
-            en,
+            req.enabled.unwrap_or(en),
         ),
         None => return error_response(StatusCode::NOT_FOUND, "AppProfile not found"),
     };

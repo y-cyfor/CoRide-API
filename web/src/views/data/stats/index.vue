@@ -48,7 +48,7 @@ async function loadFilterOptions() {
       ...(Array.isArray(items) ? items : []).map((c: any) => ({ label: c.name, value: c.id }))
     ];
   }
-  const { data: mData } = await fetchModelList(1, 1000);
+  const { data: mData } = await fetchModelList(1, 200);
   if (mData) {
     const items = mData.items || mData;
     modelOptions.value = [

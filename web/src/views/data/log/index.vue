@@ -65,7 +65,7 @@ const columns: DataTableColumns<Api.Log.RequestLog> = [
 ];
 
 async function loadModelOptions() {
-  const { data } = await fetchModelList(1, 1000);
+  const { data } = await fetchModelList(1, 200);
   if (data) {
     const items = Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : []);
     modelOptions.value = [

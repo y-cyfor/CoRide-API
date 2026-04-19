@@ -158,10 +158,6 @@ async function loadChannels() {
     const list = Array.isArray(items) ? items : [];
     channelOptions.value = list.map((c: any) => ({ label: c.name, value: c.id }));
     channels.value = list.map((c: any) => ({ id: c.id, name: c.name }));
-    // Default to the latest (last) channel
-    if (channelOptions.value.length > 0) {
-      formModel.value.channel_id = channelOptions.value[channelOptions.value.length - 1].value;
-    }
   }
 }
 

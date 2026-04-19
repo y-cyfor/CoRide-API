@@ -12,9 +12,9 @@ const columns = defineModel<NaiveUI.TableColumnCheck[]>('columns', {
 });
 
 const tooltipRecord: Record<NaiveUI.TableColumnFixed, App.I18n.I18nKey> = {
-  left: 'datatable.fixed.right',
-  right: 'datatable.fixed.unFixed',
-  unFixed: 'datatable.fixed.left'
+  left: 'datatable.fixed.left',
+  right: 'datatable.fixed.right',
+  unFixed: 'datatable.fixed.unFixed'
 };
 
 function handleFixed(column: NaiveUI.TableColumnCheck) {

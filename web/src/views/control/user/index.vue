@@ -61,7 +61,7 @@ const statusOptions = [
 const modelOptions = ref<{ label: string; value: string }[]>([]);
 
 async function loadModelOptions() {
-  const { data } = await fetchModelList(1, 1000);
+  const { data } = await fetchModelList(1, 200);
   if (data) {
     const items = Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : []);
     modelOptions.value = items
@@ -247,7 +247,11 @@ function handleEdit(row: Api.User.User) {
   editingId.value = row.id;
   let enabledModels: string[] = [];
   if (row.enabled_models) {
-    try { enabledModels = JSON.parse(row.enabled_models); } catch { /* ignore */ }
+    try {
+      enabledModels = JSON.parse(row.enabled_models);
+    } catch {
+      message.warning('该用户的模型绑定配置格式异常，已重置为空');
+    }
   }
   formModel.value = {
     username: row.username,
