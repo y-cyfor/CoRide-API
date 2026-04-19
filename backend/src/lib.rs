@@ -28,6 +28,6 @@ pub struct AppState {
     pub http_client: reqwest::Client,
     /// Per-IP rate limiters for login endpoint (5 attempts per minute).
     pub login_rate_limiters: DashMap<String, Arc<GovernorLimiter<NotKeyed, InMemoryState, DefaultClock, NoOpMiddleware>>>,
-    /// AES-256-GCM key for encrypting channel API keys at rest. None = no encryption.
-    pub encryption_key: Option<[u8; 32]>,
+    /// AES-256-GCM key for encrypting channel API keys at rest (derived from JWT secret).
+    pub encryption_key: [u8; 32],
 }

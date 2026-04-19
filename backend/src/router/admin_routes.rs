@@ -444,7 +444,7 @@ pub async fn list_channels(
     match models::list_channels(pool, page, page_size).await {
         Ok(mut channels) => {
             // Decrypt API keys if encryption is configured
-            let enc_key = state.encryption_key.as_ref();
+            let enc_key = &state.encryption_key;
             for ch in &mut channels {
                 ch.api_keys = models::maybe_decrypt_api_keys(&ch.api_keys, enc_key);
             }
@@ -514,7 +514,7 @@ pub async fn create_channel(
         req.retry_count.unwrap_or(1),
         req.quota_type.as_deref(), req.quota_limit, req.quota_cycle.as_deref(),
         req.app_profile_id,
-        state.encryption_key.as_ref(),
+        &state.encryption_key,
     ).await {
         Ok(id) => ok_response(serde_json::json!({ "id": id })),
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
@@ -543,9 +543,7 @@ pub async fn test_channel(
         Err(e) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
     };
 
-    // Decrypt API keys if encryption is configured
-    let enc_key = state.encryption_key.as_ref();
-    channel.api_keys = models::maybe_decrypt_api_keys(&channel.api_keys, enc_key);
+    channel.api_keys = models::maybe_decrypt_api_keys(&channel.api_keys, &state.encryption_key);
 
     // Test connectivity by sending a simple request to the base URL
     let client = match reqwest::Client::builder()
@@ -1016,7 +1014,7 @@ pub async fn update_channel(
     let (name, channel_type, base_url, api_keys, custom_headers, weight, timeout, retry_count, quota_type, quota_limit, quota_cycle, app_profile_id, status) = match current {
         Some((n, t, b, a, ch, w, to, r, qt, ql, qc, ap, s)) => {
             // Decrypt the stored api_keys so it can be re-encrypted properly
-            let enc_key = state.encryption_key.as_ref();
+            let enc_key = &state.encryption_key;
             let decrypted_a = models::maybe_decrypt_api_keys(&a, enc_key);
             (
                 req.name.unwrap_or(n),
@@ -1042,7 +1040,7 @@ pub async fn update_channel(
         custom_headers.as_deref(), weight, timeout, retry_count,
         quota_type.as_deref(), quota_limit, quota_cycle.as_deref(),
         app_profile_id, &status,
-        state.encryption_key.as_ref(),
+        &state.encryption_key,
     ).await {
         Ok(()) => ok_response(serde_json::json!({ "updated": true })),
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),

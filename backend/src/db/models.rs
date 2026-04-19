@@ -4,20 +4,14 @@ use chrono::Timelike;
 
 use crate::utils::encrypt;
 
-/// Encrypt channel API keys if encryption is configured.
-fn maybe_encrypt_api_keys(api_keys: &str, secret: Option<&[u8; 32]>) -> String {
-    match secret {
-        Some(key) => encrypt::encrypt(api_keys, key).unwrap_or_else(|_| api_keys.to_string()),
-        None => api_keys.to_string(),
-    }
+/// Encrypt channel API keys using the provided encryption key.
+fn maybe_encrypt_api_keys(api_keys: &str, key: &[u8; 32]) -> String {
+    encrypt::encrypt(api_keys, key).unwrap_or_else(|_| api_keys.to_string())
 }
 
-/// Decrypt channel API keys if encryption is configured.
-pub fn maybe_decrypt_api_keys(encoded: &str, secret: Option<&[u8; 32]>) -> String {
-    match secret {
-        Some(key) => encrypt::decrypt(encoded, key).unwrap_or_else(|_| encoded.to_string()),
-        None => encoded.to_string(),
-    }
+/// Decrypt channel API keys using the provided encryption key.
+pub fn maybe_decrypt_api_keys(encoded: &str, key: &[u8; 32]) -> String {
+    encrypt::decrypt(encoded, key).unwrap_or_else(|_| encoded.to_string())
 }
 
 #[derive(Debug, Clone, sqlx::FromRow, Serialize)]
@@ -332,7 +326,7 @@ pub async fn create_channel(
     quota_limit: Option<i64>,
     quota_cycle: Option<&str>,
     app_profile_id: Option<i64>,
-    enc_key: Option<&[u8; 32]>,
+    enc_key: &[u8; 32],
 ) -> Result<i64, sqlx::Error> {
     let encrypted_keys = maybe_encrypt_api_keys(api_keys, enc_key);
     let result = sqlx::query(
@@ -371,7 +365,7 @@ pub async fn update_channel(
     quota_cycle: Option<&str>,
     app_profile_id: Option<i64>,
     status: &str,
-    enc_key: Option<&[u8; 32]>,
+    enc_key: &[u8; 32],
 ) -> Result<(), sqlx::Error> {
     let encrypted_keys = maybe_encrypt_api_keys(api_keys, enc_key);
     sqlx::query(

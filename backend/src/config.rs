@@ -10,7 +10,6 @@ pub struct AppConfig {
     pub log: LogConfig,
     pub proxy: ProxyConfig,
     pub global_rate_limit: GlobalRateLimitConfig,
-    pub encryption: EncryptionConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -18,11 +17,6 @@ pub struct ServerConfig {
     pub port: u16,
     pub host: String,
     pub cors_allowed_origins: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct EncryptionConfig {
-    pub api_key_secret: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -108,9 +102,6 @@ pub async fn load() -> AppConfig {
     }
     if let Some(level) = env("CORIDE_LOG_LEVEL", "LP_LOG_LEVEL") {
         config.log.level = level;
-    }
-    if let Some(enc_key) = env("CORIDE_ENCRYPTION_KEY", "LP_ENCRYPTION_KEY") {
-        config.encryption.api_key_secret = Some(enc_key);
     }
 
     config

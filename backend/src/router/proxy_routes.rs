@@ -160,7 +160,7 @@ async fn handle_proxy(
     }
 
     // Decrypt API keys if encryption is configured
-    let enc_key = state.encryption_key.as_ref();
+    let enc_key = &state.encryption_key;
     for ch in &mut channels {
         ch.api_keys = models::maybe_decrypt_api_keys(&ch.api_keys, enc_key);
     }

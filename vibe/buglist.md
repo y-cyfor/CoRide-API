@@ -191,7 +191,7 @@
 - **文件**: `backend/src/db/models.rs:28`
 - **问题**: 渠道 API Key 在 SQLite 数据库中完全明文存储
 - **影响**: 数据库文件泄露 = 所有上游服务商 Key 泄露
-- **状态**: ✅ 已修复 — 新增 AES-256-GCM 加密模块，写入时加密、读取时解密，通过 `CORIDE_ENCRYPTION_KEY` 环境变量启用
+- **状态**: ✅ 已修复 — 默认启用 AES-256-GCM 加密，密钥从 `CORIDE_JWT_SECRET` 派生（SHA-256），写入时自动加密、读取时自动解密。无需额外配置，部署时设置的 JWT_SECRET 即为解密所需密钥。
 
 ---
 
