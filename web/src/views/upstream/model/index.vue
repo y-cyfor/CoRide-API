@@ -165,7 +165,7 @@ function handleCreate() {
   isEdit.value = false;
   editingId.value = null;
   formModel.value = {
-    channel_id: channelOptions.value.length > 0 ? channelOptions.value[channelOptions.value.length - 1].value : 0,
+    channel_id: 0,
     source_name: '',
     proxy_name: '',
     enabled: true
