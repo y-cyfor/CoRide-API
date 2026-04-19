@@ -47,15 +47,25 @@ pub async fn ensure_admin(pool: &SqlitePool, username: &str, password: &str) {
             bcrypt::hash(password, bcrypt::DEFAULT_COST).expect("Failed to hash admin password");
         let api_key = format!("sk-{}", uuid::Uuid::new_v4().simple());
 
-        sqlx::query(
-            "INSERT INTO users (username, password_hash, role, api_key, status) VALUES (?, ?, 'admin', ?, 'active')",
+        let user_id: i64 = sqlx::query_scalar(
+            "INSERT INTO users (username, password_hash, role, api_key, status) VALUES (?, ?, 'admin', ?, 'active') RETURNING id",
         )
         .bind(username)
         .bind(&password_hash)
         .bind(&api_key)
-        .execute(pool)
+        .fetch_one(pool)
         .await
         .expect("Failed to create admin user");
+
+        // Also create an initial user_key so the admin can see it in the Key Management page
+        sqlx::query(
+            "INSERT INTO user_keys (user_id, key_value, name, status) VALUES (?, ?, 'Default Key', 'active')",
+        )
+        .bind(user_id)
+        .bind(&api_key)
+        .execute(pool)
+        .await
+        .expect("Failed to create initial admin key");
 
         tracing::info!(username, "Initial admin user created");
     } else {

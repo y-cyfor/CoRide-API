@@ -145,7 +145,8 @@ async function loadData() {
   loading.value = true;
   const { data, error } = await fetchModelList(1, 100);
   if (!error && data) {
-    models.value = data;
+    const items = (data as any).items || (Array.isArray(data) ? data : []);
+    models.value = items;
   }
   loading.value = false;
 }

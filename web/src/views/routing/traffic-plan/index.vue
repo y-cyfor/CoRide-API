@@ -102,7 +102,8 @@ async function loadData() {
   try {
     const { data: pData } = await fetchAppProfileList(1, 100);
     if (pData) {
-      profileOptions.value = pData.map(p => ({ label: p.name, value: p.id }));
+      const pList = (pData as any).items || (Array.isArray(pData) ? pData : []);
+      profileOptions.value = pList.map((p: any) => ({ label: p.name, value: p.id }));
     }
 
     const { data: chData } = await fetchChannelList(1, 100);
