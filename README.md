@@ -13,6 +13,14 @@
 
 </div>
 
+<div align="center" style="margin-top: 12px;">
+
+👉 [在线 Demo](https://coride.cyfor.cn/)（账号: `admin` / 密码: `admin123`）
+
+> Demo 默认显示登录账号密码，请勿在测试环境使用你的真实ApiKeys，以免信息泄露。
+
+</div>
+
 ---
 
 ## 项目简介
@@ -23,18 +31,18 @@ CoRide-API is a lightweight AI API proxy management tool built with Rust + Vue 3
 
 **核心业务场景：**
 
-- 管理员集中管理多个 AI 服务渠道的 API Key 和配置
-  Administrators centrally manage API Keys and configurations of multiple AI service channels
-- 多个用户通过各自的 API Key 接入代理服务
-  Multiple users access the proxy service through their individual API Keys
-- 按用户进行配额限制（请求数 / Token 数）和速率控制
-  Per-user quota limits (requests / tokens) and rate control
-- 支持按用户绑定可用模型，实现精细化的权限管理
-  Model binding per user for fine-grained access control
-- 分时段、按比例将请求分流到不同的应用预设（伪装 UA 和请求头）
-  Time-based, weighted request routing to different app presets (UA + header spoofing)
-- 全量请求日志记录与统计分析，方便运维监控
-  Full request logging and statistics for operational monitoring
+- 管理员集中管理多个 AI 服务渠道的 API Key 和配置</p>
+  Administrators centrally manage API Keys and configurations of multiple AI service channels</p>
+- 多个用户通过各自的 API Key 接入代理服务</p>
+  Multiple users access the proxy service through their individual API Keys</p>
+- 按用户进行配额限制（请求数 / Token 数）和速率控制</p>
+  Per-user quota limits (requests / tokens) and rate control</p>
+- 支持按用户绑定可用模型，实现精细化的权限管理</p>
+  Model binding per user for fine-grained access control</p>
+- 分时段、按比例将请求分流到不同的应用预设（伪装 UA 和请求头）</p>
+  Time-based, weighted request routing to different app presets (UA + header spoofing)</p>
+- 全量请求日志记录与统计分析，方便运维监控</p>
+  Full request logging and statistics for operational monitoring</p>
 
 **项目定位：** 纯无商业化功能的个人/小团队拼车工具，专注于简洁、高效、易部署。
 **Positioning:** A personal/small-team carpooling tool with no commercial features, focused on simplicity, efficiency, and easy deployment.

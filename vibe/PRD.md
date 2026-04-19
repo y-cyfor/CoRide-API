@@ -295,8 +295,18 @@ web/src/
 | `CORIDE_ADMIN_PASSWORD` | 初始管理员密码 | `admin123` |
 | `CORIDE_JWT_SECRET` | JWT 签名密钥 | `change-me-to-random-string` |
 | `CORIDE_LOG_LEVEL` | 日志级别 | `info` |
+| `VITE_DEMO_MODE` | Demo 模式（Y/N），启用后登录页显示默认账号密码，顶栏显示 DEMO 警告 | `N` |
 
 兼容旧前缀 `LP_`（回退匹配）。
+
+### 3.6 Demo 模式业务逻辑
+
+| 环境变量 | 效果 |
+|----------|------|
+| `VITE_DEMO_MODE=N`（默认） | 无变化，正常登录页和顶栏 |
+| `VITE_DEMO_MODE=Y` | 登录表单下方显示 DEMO 演示账号提示（admin / admin123）；顶栏顶部显示黄色警告条："⚠️ DEMO 仅供预览，请不要添加真实数据以免信息泄露，请自行部署项目" |
+
+**使用场景：** 公开 Demo 部署时启用，让访客无需询问即可体验；正式部署时保持关闭。
 
 ---
 

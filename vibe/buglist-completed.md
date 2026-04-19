@@ -394,4 +394,367 @@ async function loadChannels() {
 **修复方案：**
 - 在 stats ref 定义中添加 `total_tokens: 0`
 
-**涉及文件：** `web/src/views/home/index.vue:17
+**涉及文件：** `web/src/views/home/index.vue:17`
+
+---
+
+## 十一、2026-04-18 新增修复
+
+### 1. IP 白名单功能完全失效（middleware 顺序错误）✅
+
+**问题描述：**
+- `ip_filter` 在 `auth` 之前执行，`user_id` 始终为 `None`，白名单检查永不执行
+
+**修复方案：**
+- 调整 layer 顺序：auth 最先执行，ip_filter 最后执行
+
+**涉及文件：** `backend/src/main.rs:67-75`
+
+---
+
+### 2. X-Real-IP / X-Forwarded-For 可被伪造 ✅
+
+**问题描述：**
+- `extract_client_ip` 无条件信任客户端 header，攻击者可伪造 IP 绕过黑名单
+
+**修复方案：**
+- 移除 X-Forwarded-For 信任，仅信任 X-Real-IP（由 nginx 等可信代理设置）或 remote_addr
+
+**涉及文件：** `backend/src/middleware/ip_filter.rs:12-28`
+
+---
+
+### 3. IP 前后端无格式验证 ✅
+
+**问题描述：**
+- 添加 IP 黑白名单时可输入任意字符串（如 `hello`）存入数据库
+
+**修复方案：**
+- 后端添加 `is_valid_ip_or_cidr` 函数校验 IPv4/IPv6/CIDR 格式
+- 前端添加正则表达式验证 + 提示文案
+
+**涉及文件：** `backend/src/router/admin_routes.rs:186-205`、`web/src/views/settings/index.vue:119-124`、`web/src/views/control/user/index.vue:97-101`
+
+---
+
+### 4. INSERT OR IGNORE 返回 ID 为 0 ✅
+
+**问题描述：**
+- 唯一约束冲突时 `INSERT OR IGNORE` 静默忽略，`last_insert_rowid()` 返回 0
+
+**修复方案：**
+- 改为"先查后插"模式：先 SELECT COUNT(*) 检查，存在则返回 409 CONFLICT
+
+**涉及文件：** `backend/src/router/admin_routes.rs:1697-1735`
+
+---
+
+### 5. models::create_quota 未支持 channel_id ✅
+
+**问题描述：**
+- 函数签名无 `channel_id` 参数，SQL 插入语句不含 `channel_id` 列
+
+**修复方案：**
+- 函数签名添加 `channel_id: Option<i64>` 参数
+- INSERT SQL 包含 channel_id 列
+
+**涉及文件：** `backend/src/db/models.rs:582-601`
+
+---
+
+### 6. quotas 表 channel_id 缺少索引 ✅
+
+**问题描述：**
+- `get_user_quota_for_channel` 使用 `WHERE user_id = ? AND channel_id = ?` 查询，无索引全表扫描
+
+**修复方案：**
+- 新增迁移 013 创建 `idx_quotas_channel_id` 索引
+
+**涉及文件：** `backend/src/db/migrations/013_add_indexes.sql:6-7`
+
+---
+
+### 7. 前端 channelOptions 使用 undefined ✅
+
+**问题描述：**
+- 前端使用 `value: undefined` 表示"全部"，数据库用 `NULL`，语义不一致
+
+**修复方案：**
+- 类型改为 `number | null`，"全部"选项值改为 `null`
+
+**涉及文件：** `web/src/views/control/quota/index.vue:30、57`
+
+---
+
+### 8. anthropic-beta header 会被覆盖 ✅
+
+**问题描述：**
+- `headers.extend()` 会覆盖硬编码的 `prompt-caching-2024-07-31`，导致缓存 header 丢失
+
+**修复方案：**
+- 添加 `merge_anthropic_beta` 函数，按逗号分割去重合并，而非直接覆盖
+
+**涉及文件：** `backend/src/service/proxy.rs:72-114`
+
+---
+
+### 9. request_logs 缺少 channel_id 索引 ✅
+
+**问题描述：**
+- 所有按渠道聚合的查询均为全表扫描
+
+**修复方案：**
+- 新增迁移 013 创建 `idx_request_logs_channel_id` 索引
+
+**涉及文件：** `backend/src/db/migrations/013_add_indexes.sql:4`
+
+---
+
+### 10. P95 延迟计算排序方向错误 ✅
+
+**问题描述：**
+- 使用 `ORDER BY elapsed_ms DESC`（降序），P95 定义应为升序
+
+**修复方案：**
+- 改为 `ORDER BY elapsed_ms ASC`
+
+**涉及文件：** `backend/src/router/admin_routes.rs:780`
+
+---
+
+### 11. today_requests SUM 空集返回 NULL ✅
+
+**问题描述：**
+- `SUM(CASE WHEN ...)` 对空集返回 NULL 而非 0
+
+**修复方案：**
+- 添加 `COALESCE(..., 0)` 包装
+
+**涉及文件：** `backend/src/router/admin_routes.rs:371-372`
+
+---
+
+### 12. 前端类型定义缺少 model_usage 字段 ✅
+
+**问题描述：**
+- `stats.ts` 返回类型缺少 `model_usage`，TypeScript 无法类型检查
+
+**修复方案：**
+- 类型定义添加 `model_usage: Array<{ name: string; count: number }>`
+
+**涉及文件：** `web/src/service/api/stats.ts:24`
+
+---
+
+### 13. error_rate 类型定义缺失 ✅
+
+**问题描述：**
+- `DashboardStats` 类型定义缺少 `error_rate` 字段
+
+**修复方案：**
+- 类型定义添加 `error_rate: string`
+
+**涉及文件：** `web/src/typings/api/liteproxy.d.ts`
+
+---
+
+## 十二、2026-04-18 未修复缺陷
+
+> 以下缺陷经过评估后决定不修复，原因见各条说明。
+
+### 1. 管理员路由不受 IP 过滤限制 ⏭️ 未修复
+
+**问题描述：**
+- `admin_protected` 和 `user_routes` 路由组未应用 `ip_filter` middleware
+
+**未修复原因：** 设计如此。管理员不应被自己的黑名单拦截，否则可能将自己锁在系统外。
+
+**涉及文件：** `backend/src/main.rs:153-160`、`backend/src/main.rs:83-92`
+
+---
+
+### 2. 配额检查与扣除非原子操作 ⏭️ 未修复
+
+**问题描述：**
+- `check_user_quota` 和 `deduct_user_quota` 是两个独立操作，高并发下可超限
+
+**未修复原因：** 设计如此。个人项目并发极低，原子操作带来的复杂度收益不明显。
+
+**涉及文件：** `backend/src/router/proxy_routes.rs:179`、`backend/src/service/quota.rs`
+
+---
+
+### 3. 无配置化开关禁用 anthropic-beta header ⏭️ 未修复
+
+**问题描述：**
+- `anthropic-beta` header 硬编码，无法关闭
+
+**未修复原因：** 设计如此。Anthropic 官方渠道始终需要此 beta header，第三方兼容渠道不支持时可通过 custom_headers 覆盖。
+
+**涉及文件：** `backend/src/service/proxy.rs:58`
+
+---
+
+### 4. 健康检查未添加 anthropic-beta header ⏭️ 未修复
+
+**问题描述：**
+- 健康检查请求 Anthropic 渠道时未添加 `anthropic-beta`
+
+**未修复原因：** 设计如此。健康检查只验证连通性（`/models` 端点），不涉及缓存功能，不需要此 header。
+
+**涉及文件：** `backend/src/service/health.rs:48-52`
+
+---
+
+### 5. "今日"统计定义不一致 ⏭️ 未修复
+
+**问题描述：**
+- `dashboard_stats` 用 `-1 day`（最近24h），`list_channels` 用 `start of day`（今日0点）
+
+**未修复原因：** 设计如此。"今日"和"最近24小时"是不同业务场景，各有用途，定义合理。
+
+**涉及文件：** `backend/src/router/admin_routes.rs:350-351`、`backend/src/router/admin_routes.rs:744`
+
+---
+
+### 6. error_rate 返回字符串 ⏭️ 未修复
+
+**问题描述：**
+- 后端返回 `"0.0%"` 字符串，传入 `NStatistic` 组件
+
+**未修复原因：** 设计如此。后端已格式化为带 `%` 的字符串，前端直接显示即可，无需额外处理。
+
+**涉及文件：** `backend/src/router/admin_routes.rs:784-788`
+
+---
+
+### 7. 进度超过 100% 时显示不一致 ⏭️ 未修复
+
+**问题描述：**
+- 进度条限死 100%，但文本显示实际超限值（如 "150/100 次"）
+
+**未修复原因：** 设计如此。进度条限制最大值保证视觉一致，文本显示实际值提供准确信息，差异可接受。
+
+**涉及文件：** `web/src/views/upstream/channel/index.vue:260`、`web/src/views/upstream/channel/index.vue:273`
+
+---
+
+### 8. quota_period_end 为 None 时配额不重置 ⏭️ 未修复
+
+**问题描述：**
+- `period_end` 为 `None` 时 `reset_channel_quota_if_expired` 不执行重置
+
+**未修复原因：** 设计如此。`permanent`（永久）配额的 `period_end` 为 `None` 是预期行为，不需要重置。
+
+**涉及文件：** `backend/src/service/quota.rs:111`
+
+---
+
+### 9. i64 值超出 JavaScript 安全整数范围 ⏭️ 未修复
+
+**问题描述：**
+- 后端 `quota_used` 和 `quota_limit` 为 i64，可能超过 `Number.MAX_SAFE_INTEGER`
+
+**未修复原因：** 设计如此。个人项目配额值远不到 2^53，不会触发精度问题。
+
+**涉及文件：** `web/src/views/upstream/channel/index.vue:258-260`
+
+---
+
+### 10. channel_id 列缺少外键约束 ⏭️ 未修复
+
+**问题描述：**
+- `quotas.channel_id` 无外键引用 `channels` 表
+
+**未修复原因：** 设计如此。SQLite 默认不启用外键约束（`PRAGMA foreign_keys = OFF`），添加外键无实际效果。
+
+**涉及文件：** `backend/src/db/migrations/011_quotas_channel_id.sql`
+
+---
+
+### 11. 数据库错误时 Fail-Open 策略 ⏭️ 未修复
+
+**问题描述：**
+- IP 黑白名单查询失败时允许请求通过
+
+**未修复原因：** 设计如此。数据库故障时 Fail-Open 避免服务完全中断，可用性优先于安全性。
+
+**涉及文件：** `backend/src/middleware/ip_filter.rs:50-52`、`backend/src/middleware/ip_filter.rs:63-65`
+
+---
+
+### 12. 不支持 CIDR 格式 ⏭️ 未修复
+
+**问题描述：**
+- IP 黑白名单为精确字符串匹配，不支持 `192.168.1.0/24` 网段
+
+**未修复原因：** 暂不实施。CIDR 支持增加复杂度，个人项目单 IP 过滤够用。
+
+**涉及文件：** `backend/src/db/models.rs:715-722`、`backend/src/db/models.rs:745-751`
+
+---
+
+### 13. 不支持 IPv6 地址标准化 ⏭️ 未修复
+
+**问题描述：**
+- `::1` 和 `0:0:0:0:0:0:0:1` 被视为不同地址
+
+**未修复原因：** 暂不实施。IPv6 标准化优先级低，当前用户以 IPv4 为主。
+
+**涉及文件：** `backend/src/middleware/ip_filter.rs:13-33`
+
+---
+
+### 14. IP 过滤无缓存每次查库 ⏭️ 未修复
+
+**问题描述：**
+- 每个请求执行 1-2 次 SQLite 查询检查 IP 黑白名单
+
+**未修复原因：** 暂不实施。个人项目 QPS 低，SQLite 查询性能足够。
+
+**涉及文件：** `backend/src/middleware/ip_filter.rs:44`、`backend/src/middleware/ip_filter.rs:57`
+
+---
+
+### 15. 编辑配额时不支持修改渠道 ⏭️ 未修复
+
+**问题描述：**
+- 编辑配额时渠道选择器隐藏，无法更改关联渠道
+
+**未修复原因：** 暂不实施。渠道级配额创建后通常不需改渠道，优先级低。
+
+**涉及文件：** `web/src/views/control/quota/index.vue:178-180`
+
+---
+
+### 16. 顶部用户查询无时间范围限制 ⏭️ 未修复
+
+**问题描述：**
+- 无过滤条件时 top_users 扫描全表历史数据
+
+**未修复原因：** 暂不实施。个人项目用户数和日志量有限，性能可接受。
+
+**涉及文件：** `backend/src/router/admin_routes.rs:1108-1115`
+
+---
+
+### 17. 配额类型空字符串误判为无限制 ⏭️ 未修复
+
+**问题描述：**
+- `!row.quota_type` 将空字符串 `''` 误判为无限制
+
+**未修复原因：** 实际影响极小。正常流程中 `quota_type` 只会是 `null`、`'requests'` 或 `'tokens'`，空字符串几乎不会出现。
+
+**涉及文件：** `web/src/views/upstream/channel/index.vue:255`
+
+---
+
+## 最终统计
+
+| 类别 | 数量 |
+|------|------|
+| 已修复 | 56 |
+| 未修复（设计如此） | 11 |
+| 未修复（暂不实施） | 5 |
+| 未修复（影响极小） | 1 |
+| **缺陷总计** | **73** |
