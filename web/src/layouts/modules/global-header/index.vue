@@ -33,11 +33,10 @@ const { isFullscreen, toggle } = useFullscreen();
 </script>
 
 <template>
-  <div class="flex flex-col">
-    <NAlert v-if="isDemoMode" type="warning" :bordered="false" class="text-center py-6px px-12px text-13px font-medium rounded-none">
-      ⚠️ DEMO 仅供预览，请不要添加真实数据以免信息泄露，请自行部署项目
+  <DarkModeContainer class="h-full flex-y-center px-12px shadow-header">
+    <NAlert v-if="isDemoMode" type="warning" :bordered="false" class="mr-12px text-13px font-medium rounded" style="flex: 1; max-width: 480px; line-height: 20px; padding: 2px 12px;">
+      ⚠️ DEMO 仅供预览，请勿添加真实数据
     </NAlert>
-    <DarkModeContainer class="h-full flex-y-center px-12px shadow-header">
     <GlobalLogo v-if="showLogo" class="h-full" :style="{ width: themeStore.sider.width + 'px' }" />
     <MenuToggler v-if="showMenuToggler" :collapsed="appStore.siderCollapse" @click="appStore.toggleSiderCollapse" />
     <div v-if="showMenu" :id="GLOBAL_HEADER_MENU_ID" class="h-full flex-y-center flex-1-hidden"></div>
@@ -61,8 +60,7 @@ const { isFullscreen, toggle } = useFullscreen();
       <ThemeButton />
       <UserAvatar />
     </div>
-    </DarkModeContainer>
-  </div>
+  </DarkModeContainer>
 </template>
 
 <style scoped></style>
