@@ -30,6 +30,10 @@ pub async fn build(cfg: AppConfig, db: sqlx::SqlitePool) -> Arc<AppState> {
     let global_qps_limiter = build_global_qps_limiter(&cfg);
     let http_client = reqwest::Client::new();
 
+    let encryption_key = cfg.encryption.api_key_secret.as_ref().map(|s| {
+        crate::utils::encrypt::derive_key(s)
+    });
+
     Arc::new(AppState {
         config: cfg,
         db,
@@ -38,6 +42,7 @@ pub async fn build(cfg: AppConfig, db: sqlx::SqlitePool) -> Arc<AppState> {
         user_rate_limiters: DashMap::new(),
         http_client,
         login_rate_limiters: DashMap::new(),
+        encryption_key,
     })
 }
 

@@ -2,6 +2,24 @@ use serde::Serialize;
 use sqlx::SqlitePool;
 use chrono::Timelike;
 
+use crate::utils::encrypt;
+
+/// Encrypt channel API keys if encryption is configured.
+fn maybe_encrypt_api_keys(api_keys: &str, secret: Option<&[u8; 32]>) -> String {
+    match secret {
+        Some(key) => encrypt::encrypt(api_keys, key).unwrap_or_else(|_| api_keys.to_string()),
+        None => api_keys.to_string(),
+    }
+}
+
+/// Decrypt channel API keys if encryption is configured.
+pub fn maybe_decrypt_api_keys(encoded: &str, secret: Option<&[u8; 32]>) -> String {
+    match secret {
+        Some(key) => encrypt::decrypt(encoded, key).unwrap_or_else(|_| encoded.to_string()),
+        None => encoded.to_string(),
+    }
+}
+
 #[derive(Debug, Clone, sqlx::FromRow, Serialize)]
 pub struct User {
     pub id: i64,
@@ -314,14 +332,16 @@ pub async fn create_channel(
     quota_limit: Option<i64>,
     quota_cycle: Option<&str>,
     app_profile_id: Option<i64>,
+    enc_key: Option<&[u8; 32]>,
 ) -> Result<i64, sqlx::Error> {
+    let encrypted_keys = maybe_encrypt_api_keys(api_keys, enc_key);
     let result = sqlx::query(
         "INSERT INTO channels (name, type, base_url, api_keys, custom_headers, weight, timeout, retry_count, quota_type, quota_limit, quota_cycle, app_profile_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')",
     )
     .bind(name)
     .bind(channel_type)
     .bind(base_url)
-    .bind(api_keys)
+    .bind(&encrypted_keys)
     .bind(custom_headers)
     .bind(weight)
     .bind(timeout)
@@ -351,14 +371,16 @@ pub async fn update_channel(
     quota_cycle: Option<&str>,
     app_profile_id: Option<i64>,
     status: &str,
+    enc_key: Option<&[u8; 32]>,
 ) -> Result<(), sqlx::Error> {
+    let encrypted_keys = maybe_encrypt_api_keys(api_keys, enc_key);
     sqlx::query(
         "UPDATE channels SET name=?, type=?, base_url=?, api_keys=?, custom_headers=?, weight=?, timeout=?, retry_count=?, quota_type=?, quota_limit=?, quota_cycle=?, app_profile_id=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
     )
     .bind(name)
     .bind(channel_type)
     .bind(base_url)
-    .bind(api_keys)
+    .bind(&encrypted_keys)
     .bind(custom_headers)
     .bind(weight)
     .bind(timeout)

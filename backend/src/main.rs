@@ -162,13 +162,45 @@ async fn main() {
         .layer(from_fn_with_state(state.clone(), admin_auth::admin_auth_middleware));
 
     // 10. Combine all routes
-    let app = Router::new()
-        .route("/health", get(health_check))
-        .merge(proxy_routes)
-        .merge(admin_public)
-        .merge(user_routes)
-        .merge(admin_protected)
-        .layer(CorsLayer::new()
+    // Build CORS layer: use configured allowed origins, fallback to Any for backwards compatibility
+    let cors_layer = if let Some(origins) = &state.config.server.cors_allowed_origins {
+        if origins.is_empty() {
+            // Empty list = allow all (backwards compatible)
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods([
+                    axum::http::Method::GET,
+                    axum::http::Method::POST,
+                    axum::http::Method::PUT,
+                    axum::http::Method::DELETE,
+                    axum::http::Method::OPTIONS,
+                ])
+                .allow_headers([
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::header::AUTHORIZATION,
+                    axum::http::header::ACCEPT,
+                ])
+        } else {
+            let parsed_origins: Vec<axum::http::HeaderValue> = origins.iter()
+                .filter_map(|o| o.parse().ok())
+                .collect();
+            CorsLayer::new()
+                .allow_origin(parsed_origins)
+                .allow_methods([
+                    axum::http::Method::GET,
+                    axum::http::Method::POST,
+                    axum::http::Method::PUT,
+                    axum::http::Method::DELETE,
+                    axum::http::Method::OPTIONS,
+                ])
+                .allow_headers([
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::header::AUTHORIZATION,
+                    axum::http::header::ACCEPT,
+                ])
+        }
+    } else {
+        CorsLayer::new()
             .allow_origin(Any)
             .allow_methods([
                 axum::http::Method::GET,
@@ -181,7 +213,16 @@ async fn main() {
                 axum::http::header::CONTENT_TYPE,
                 axum::http::header::AUTHORIZATION,
                 axum::http::header::ACCEPT,
-            ]))
+            ])
+    };
+
+    let app = Router::new()
+        .route("/health", get(health_check))
+        .merge(proxy_routes)
+        .merge(admin_public)
+        .merge(user_routes)
+        .merge(admin_protected)
+        .layer(cors_layer)
         .with_state(state.clone());
 
     // 11. Start log cleanup background task

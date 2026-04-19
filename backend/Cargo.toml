@@ -24,3 +24,7 @@ dashmap = "6"
 tower-http = { version = "0.6", features = ["cors", "fs", "compression-br"] }
 uuid = { version = "1", features = ["v4"] }
 dotenvy = "0.15"
+base64 = "0.22"
+aes-gcm = { version = "0.10", features = ["std"] }
+sha2 = "0.10"
+fastrand = "2"

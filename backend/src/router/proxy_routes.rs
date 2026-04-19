@@ -147,7 +147,7 @@ async fn handle_proxy(
     let streaming = is_stream_request(&body_json);
 
     // Find channels for this model
-    let channels = match models::find_channels_for_model(pool, model_name).await {
+    let mut channels = match models::find_channels_for_model(pool, model_name).await {
         Ok(ch) => ch,
         Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, "Internal error"),
     };
@@ -157,6 +157,12 @@ async fn handle_proxy(
             StatusCode::NOT_FOUND,
             &format!("Model '{}' not found or no active channels", model_name),
         );
+    }
+
+    // Decrypt API keys if encryption is configured
+    let enc_key = state.encryption_key.as_ref();
+    for ch in &mut channels {
+        ch.api_keys = models::maybe_decrypt_api_keys(&ch.api_keys, enc_key);
     }
 
     // Try each channel until one succeeds

@@ -3,6 +3,9 @@
 server:
   port: 8000
   host: "0.0.0.0"
+  # CORS allowed origins. Set to empty list [] to restrict, or omit/null to allow all (backwards compatible).
+  # Example: ["https://example.com", "https://admin.example.com"]
+  cors_allowed_origins: null
 
 database:
   path: "./data/coride.db"
@@ -31,3 +34,8 @@ global_rate_limit:
   qps: 100
   concurrency: 50
   action: "reject"
+
+# Encryption for sensitive fields (channel API keys)
+# Set CORIDE_ENCRYPTION_KEY env var to enable AES-256-GCM encryption
+encryption:
+  api_key_secret: null

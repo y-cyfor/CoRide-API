@@ -442,7 +442,13 @@ pub async fn list_channels(
     };
 
     match models::list_channels(pool, page, page_size).await {
-        Ok(channels) => {
+        Ok(mut channels) => {
+            // Decrypt API keys if encryption is configured
+            let enc_key = state.encryption_key.as_ref();
+            for ch in &mut channels {
+                ch.api_keys = models::maybe_decrypt_api_keys(&ch.api_keys, enc_key);
+            }
+
             // Fetch all channel stats in a single GROUP BY query
             let stats_map: std::collections::HashMap<i64, (i64, i64, i64, i64)> = sqlx::query_as(
                 "SELECT channel_id,
@@ -508,6 +514,7 @@ pub async fn create_channel(
         req.retry_count.unwrap_or(1),
         req.quota_type.as_deref(), req.quota_limit, req.quota_cycle.as_deref(),
         req.app_profile_id,
+        state.encryption_key.as_ref(),
     ).await {
         Ok(id) => ok_response(serde_json::json!({ "id": id })),
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
@@ -530,11 +537,15 @@ pub async fn test_channel(
     Path(id): Path<i64>,
 ) -> Response {
     let pool = &state.db;
-    let channel = match models::get_channel_by_id(pool, id).await {
+    let mut channel = match models::get_channel_by_id(pool, id).await {
         Ok(Some(c)) => c,
         Ok(None) => return error_response(StatusCode::NOT_FOUND, "Channel not found"),
         Err(e) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
     };
+
+    // Decrypt API keys if encryption is configured
+    let enc_key = state.encryption_key.as_ref();
+    channel.api_keys = models::maybe_decrypt_api_keys(&channel.api_keys, enc_key);
 
     // Test connectivity by sending a simple request to the base URL
     let client = match reqwest::Client::builder()
@@ -1003,21 +1014,26 @@ pub async fn update_channel(
             .flatten();
 
     let (name, channel_type, base_url, api_keys, custom_headers, weight, timeout, retry_count, quota_type, quota_limit, quota_cycle, app_profile_id, status) = match current {
-        Some((n, t, b, a, ch, w, to, r, qt, ql, qc, ap, s)) => (
-            req.name.unwrap_or(n),
-            req.r#type.unwrap_or(t),
-            req.base_url.unwrap_or(b),
-            req.api_keys.unwrap_or(a),
-            req.custom_headers.or(ch),
-            req.weight.unwrap_or(w),
-            req.timeout.unwrap_or(to),
-            req.retry_count.unwrap_or(r),
-            req.quota_type.or(qt),
-            req.quota_limit.or(ql),
-            req.quota_cycle.or(qc),
-            req.app_profile_id.or(ap),
-            req.status.unwrap_or(s),
-        ),
+        Some((n, t, b, a, ch, w, to, r, qt, ql, qc, ap, s)) => {
+            // Decrypt the stored api_keys so it can be re-encrypted properly
+            let enc_key = state.encryption_key.as_ref();
+            let decrypted_a = models::maybe_decrypt_api_keys(&a, enc_key);
+            (
+                req.name.unwrap_or(n),
+                req.r#type.unwrap_or(t),
+                req.base_url.unwrap_or(b),
+                req.api_keys.unwrap_or(decrypted_a),
+                req.custom_headers.or(ch),
+                req.weight.unwrap_or(w),
+                req.timeout.unwrap_or(to),
+                req.retry_count.unwrap_or(r),
+                req.quota_type.or(qt),
+                req.quota_limit.or(ql),
+                req.quota_cycle.or(qc),
+                req.app_profile_id.or(ap),
+                req.status.unwrap_or(s),
+            )
+        }
         None => return error_response(StatusCode::NOT_FOUND, "Channel not found"),
     };
 
@@ -1026,6 +1042,7 @@ pub async fn update_channel(
         custom_headers.as_deref(), weight, timeout, retry_count,
         quota_type.as_deref(), quota_limit, quota_cycle.as_deref(),
         app_profile_id, &status,
+        state.encryption_key.as_ref(),
     ).await {
         Ok(()) => ok_response(serde_json::json!({ "updated": true })),
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
