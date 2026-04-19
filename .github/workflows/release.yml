@@ -89,7 +89,8 @@ jobs:
         id: notes
         run: |
           # Fetch all tags and history for proper diff
-          git fetch --tags --unshallow 2>/dev/null || git fetch --tags
+          # Force fetch to handle recreated tags
+          git fetch --tags --force 2>/dev/null || true
           PREV_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.' | grep -v "^v${{ steps.version.outputs.VERSION }}$" | head -1)
           if [ -z "$PREV_TAG" ]; then
             PREV_TAG=$(git rev-list --max-parents=0 HEAD)
