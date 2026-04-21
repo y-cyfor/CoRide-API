@@ -31,3 +31,6 @@ CLAUDE.md
 # Personal
 dev.bat
 dev.sh
+
+# Test reports
+vibe/test/
