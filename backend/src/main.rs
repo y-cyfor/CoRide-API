@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::{
     extract::State,
@@ -9,7 +10,7 @@ use axum::{
 use tower_http::cors::{Any, CorsLayer};
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::prelude::*;
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{reload, EnvFilter};
 
 use coride_api::config;
 use coride_api::db::{self, models};
@@ -28,14 +29,15 @@ async fn main() {
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new(format!("coride_api={log_level}")));
 
-    // Create log directory
+    let (filter_layer, reload_handle) = reload::Layer::new(env_filter);
+
     std::fs::create_dir_all("log").ok();
 
     let file_appender = RollingFileAppender::new(Rotation::DAILY, "log", "coride-api.log");
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 
     tracing_subscriber::registry()
-        .with(env_filter)
+        .with(filter_layer)
         .with(tracing_subscriber::fmt::Layer::default().with_target(false))
         .with(
             tracing_subscriber::fmt::Layer::default()
@@ -46,7 +48,7 @@ async fn main() {
 
     tracing::info!(port = cfg.server.port, "Starting CoRide-API");
 
-    // 3. Initialize database pool (directory + file creation handled by init_pool)
+    // 3. Initialize database pool
     let db_pool = db::init_pool(&cfg.database.path, cfg.database.pool_size).await;
 
     // 4. Run migrations
@@ -61,25 +63,42 @@ async fn main() {
     db::ensure_admin(&db_pool, &cfg.admin.username, &cfg.admin.password).await;
 
     // 7. Build application state
-    let state = state_builder::build(cfg.clone(), db_pool.clone()).await;
+    let state = state_builder::build(cfg.clone(), db_pool.clone(), reload_handle).await;
 
-    // 8. Build proxy routes
+    // 8. Proxy routes.
+    //
+    // Layer order matters: axum runs the *last* applied layer first, so the list below
+    // is written in reverse execution order. The resulting pipeline is:
+    //   IP blocklist -> global rate limit -> API key auth -> per-user rate limit
+    //   -> per-user IP whitelist
+    // The whitelist needs the authenticated user id, which the old ordering (whitelist
+    // before auth) silently skipped.
     let proxy_routes = Router::new()
         .route("/v1/chat/completions", post(proxy_routes::chat_completions))
         .route("/v1/completions", post(proxy_routes::completions))
         .route("/v1/messages", post(proxy_routes::messages))
         .route("/v1/models", get(proxy_routes::list_models))
         .route("/v1/user/info", get(proxy_routes::user_info))
+        .layer(from_fn_with_state(state.clone(), ip_filter::ip_whitelist))
+        .layer(from_fn_with_state(
+            state.clone(),
+            rate_limit::user_rate_limit_middleware,
+        ))
         .layer(from_fn_with_state(state.clone(), auth::auth_middleware))
-        .layer(from_fn_with_state(state.clone(), rate_limit::rate_limit_middleware))
-        .layer(from_fn_with_state(state.clone(), ip_filter::ip_filter));
+        .layer(from_fn_with_state(
+            state.clone(),
+            rate_limit::rate_limit_middleware,
+        ))
+        .layer(from_fn_with_state(state.clone(), ip_filter::ip_blocklist));
 
     // 9. Build admin routes
     let admin_public = Router::new()
-        // Auth (public)
         .route("/admin/auth/login", post(admin_routes::login))
         .route("/admin/auth/refresh", post(admin_routes::refresh_token))
-        .layer(from_fn_with_state(state.clone(), rate_limit::login_rate_limit_middleware));
+        .layer(from_fn_with_state(
+            state.clone(),
+            rate_limit::login_rate_limit_middleware,
+        ));
 
     // User-facing routes (JWT auth, not admin-only)
     let user_routes = Router::new()
@@ -162,58 +181,25 @@ async fn main() {
         .layer(from_fn_with_state(state.clone(), admin_auth::admin_auth_middleware));
 
     // 10. Combine all routes
-    // Build CORS layer: use configured allowed origins, fallback to Any for backwards compatibility
-    let cors_layer = if let Some(origins) = &state.config.server.cors_allowed_origins {
-        if origins.is_empty() {
-            // Empty list = allow all (backwards compatible)
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods([
-                    axum::http::Method::GET,
-                    axum::http::Method::POST,
-                    axum::http::Method::PUT,
-                    axum::http::Method::DELETE,
-                    axum::http::Method::OPTIONS,
-                ])
-                .allow_headers([
-                    axum::http::header::CONTENT_TYPE,
-                    axum::http::header::AUTHORIZATION,
-                    axum::http::header::ACCEPT,
-                ])
-        } else {
-            let parsed_origins: Vec<axum::http::HeaderValue> = origins.iter()
-                .filter_map(|o| o.parse().ok())
-                .collect();
-            CorsLayer::new()
-                .allow_origin(parsed_origins)
-                .allow_methods([
-                    axum::http::Method::GET,
-                    axum::http::Method::POST,
-                    axum::http::Method::PUT,
-                    axum::http::Method::DELETE,
-                    axum::http::Method::OPTIONS,
-                ])
-                .allow_headers([
-                    axum::http::header::CONTENT_TYPE,
-                    axum::http::header::AUTHORIZATION,
-                    axum::http::header::ACCEPT,
-                ])
-        }
-    } else {
-        CorsLayer::new()
-            .allow_origin(Any)
+    let cors_layer = {
+        use axum::http::{header, HeaderValue, Method};
+        let base = CorsLayer::new()
             .allow_methods([
-                axum::http::Method::GET,
-                axum::http::Method::POST,
-                axum::http::Method::PUT,
-                axum::http::Method::DELETE,
-                axum::http::Method::OPTIONS,
+                Method::GET,
+                Method::POST,
+                Method::PUT,
+                Method::DELETE,
+                Method::OPTIONS,
             ])
-            .allow_headers([
-                axum::http::header::CONTENT_TYPE,
-                axum::http::header::AUTHORIZATION,
-                axum::http::header::ACCEPT,
-            ])
+            .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION, header::ACCEPT]);
+
+        match &state.config.server.cors_allowed_origins {
+            Some(origins) if !origins.is_empty() => {
+                let parsed: Vec<HeaderValue> = origins.iter().filter_map(|o| o.parse().ok()).collect();
+                base.allow_origin(parsed)
+            }
+            _ => base.allow_origin(Any),
+        }
     };
 
     let app = Router::new()
@@ -225,67 +211,107 @@ async fn main() {
         .layer(cors_layer)
         .with_state(state.clone());
 
-    // 11. Start log cleanup background task
-    let cleanup_pool = db_pool.clone();
-    let retention_days = cfg.log.retention_days as i32;
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(3600)); // Run every hour
-        loop {
-            interval.tick().await;
-            match models::cleanup_old_logs(&cleanup_pool, retention_days).await {
-                Ok(deleted) => {
-                    if deleted > 0 {
-                        tracing::info!(deleted = deleted, "Cleaned up old request logs");
+    // 11. Log cleanup background task (retention is re-read on every tick)
+    {
+        let cleanup_pool = db_pool.clone();
+        let cleanup_state = state.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(3600));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                interval.tick().await;
+                let retention_days = cleanup_state.retention_days() as i32;
+                match models::cleanup_old_logs(&cleanup_pool, retention_days).await {
+                    Ok(deleted) if deleted > 0 => {
+                        tracing::info!(deleted, retention_days, "Cleaned up old request logs");
                     }
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "Failed to clean up old request logs");
+                    Ok(_) => {}
+                    Err(e) => tracing::warn!(error = %e, "Failed to clean up old request logs"),
                 }
             }
-        }
-    });
+        });
+    }
 
-    // 12. Start channel health check background task
-    let health_pool = db_pool.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300)); // Run every 5 minutes
-        loop {
-            interval.tick().await;
-            match coride_api::service::health::check_channels_health(&health_pool).await {
-                Ok((disabled, recovered)) => {
-                    if !disabled.is_empty() {
-                        tracing::warn!(channels = ?disabled, "Disabled unhealthy channels");
+    // 12. Channel health check background task
+    if cfg.health_check.enabled {
+        let health_pool = db_pool.clone();
+        let health_state = state.clone();
+        let health_cfg = cfg.health_check.clone();
+        tokio::spawn(async move {
+            let interval_secs = health_cfg.interval_secs.max(10);
+            let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                interval.tick().await;
+                match coride_api::service::health::check_channels_health(
+                    &health_pool,
+                    &health_state.encryption,
+                    &health_cfg,
+                )
+                .await
+                {
+                    Ok(report) => {
+                        if !report.disabled.is_empty() {
+                            tracing::warn!(channels = ?report.disabled, "Disabled unhealthy channels");
+                        }
+                        if !report.recovered.is_empty() {
+                            tracing::info!(channels = ?report.recovered, "Recovered healthy channels");
+                        }
+                        if !report.skipped.is_empty() {
+                            tracing::warn!(
+                                channels = ?report.skipped,
+                                "Channels skipped by health check (unusable configuration)"
+                            );
+                        }
                     }
-                    if !recovered.is_empty() {
-                        tracing::info!(channels = ?recovered, "Recovered healthy channels");
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "Failed to check channel health");
+                    Err(e) => tracing::warn!(error = %e, "Failed to check channel health"),
                 }
             }
-        }
-    });
+        });
+    } else {
+        tracing::info!("Channel health checks are disabled");
+    }
 
-    // 13. Start server with graceful shutdown
+    // 13. Periodically refresh rate limit configuration so out-of-band edits apply.
+    {
+        let rate_state = state.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                interval.tick().await;
+                if let Err(e) = rate_state.reload_rate_limits().await {
+                    tracing::warn!(error = %e, "Failed to refresh rate limit configuration");
+                }
+            }
+        });
+    }
+
+    // 14. Start server with graceful shutdown
     let addr = format!("{}:{}", state.config.server.host, state.config.server.port);
-    let listener = tokio::net::TcpListener::bind(&addr).await
+    let listener = tokio::net::TcpListener::bind(&addr)
+        .await
         .unwrap_or_else(|e| panic!("Failed to bind to {addr}: {e}"));
 
     tracing::info!(%addr, "CoRide-API server listening");
 
-    // Graceful shutdown: listen for Ctrl+C (works on all platforms)
     let shutdown_signal = async {
-        tokio::signal::ctrl_c().await.expect("Failed to install Ctrl+C handler");
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to install Ctrl+C handler");
         tracing::info!("Shutting down gracefully...");
     };
 
-    axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>())
-        .with_graceful_shutdown(shutdown_signal)
-        .await
-        .unwrap();
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal)
+    .await
+    .unwrap();
 }
 
+/// GET /health — returns system health status including database connectivity.
 async fn health_check(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
     let db_ok = sqlx::query("SELECT 1")
         .fetch_optional(&state.db)
@@ -296,11 +322,13 @@ async fn health_check(State(state): State<Arc<AppState>>) -> Json<serde_json::Va
         Json(serde_json::json!({
             "status": "ok",
             "database": "connected",
+            "version": env!("CARGO_PKG_VERSION"),
         }))
     } else {
         Json(serde_json::json!({
             "status": "degraded",
             "database": "disconnected",
+            "version": env!("CARGO_PKG_VERSION"),
         }))
     }
 }

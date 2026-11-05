@@ -1,20 +1,30 @@
 import { request } from '../request';
+import { localStg } from '@/utils/storage';
 
-/** Get request log list with pagination and server-side filtering */
-export function fetchLogList(page = 1, pageSize = 20, params?: { model?: string; status_code?: string; start_time?: string; end_time?: string }) {
-  return request<Api.Log.RequestLog[]>({
+/** Get request log list with pagination and server-side filtering (admin) */
+export function fetchLogList(page = 1, pageSize = 20, params?: Api.Log.LogFilter) {
+  return request<Api.Common.PageResult<Api.Log.RequestLog>>({
     url: '/admin/logs',
     method: 'get',
     params: { page, page_size: pageSize, ...params }
   });
 }
 
-/** Get latest request logs (for dashboard real-time view) */
+/** Get latest request logs (for the dashboard real-time view) */
 export function fetchRecentLogs(limit = 10) {
-  return request<Api.Log.RequestLog[]>({
+  return request<Api.Common.PageResult<Api.Log.RequestLog>>({
     url: '/admin/logs',
     method: 'get',
     params: { page: 1, page_size: limit }
+  });
+}
+
+/** Get the current user's own request logs */
+export function fetchUserLogList(page = 1, pageSize = 20, params?: Api.Log.LogFilter) {
+  return request<Api.Common.PageResult<Api.Log.RequestLog>>({
+    url: '/user/logs',
+    method: 'get',
+    params: { page, page_size: pageSize, ...params }
   });
 }
 
@@ -22,13 +32,11 @@ export function fetchRecentLogs(limit = 10) {
 export function exportLogsCsv() {
   const base = import.meta.env.VITE_SERVICE_BASE_URL || '';
   const url = `${base}/admin/logs/export`;
-  const token = localStorage.getItem('CORIDE_token');
-  // Remove quotes from the stored token
-  const cleanToken = token ? token.replace(/^"|"$/g, '') : '';
+  const token = (localStg.get('token') || '').replace(/"/g, '');
   return fetch(url, {
     method: 'GET',
     headers: {
-      Authorization: cleanToken ? `Bearer ${cleanToken}` : ''
+      Authorization: token ? `Bearer ${token}` : ''
     }
   });
 }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, h, onMounted } from 'vue';
 import { useAuthStore } from '@/store/modules/auth';
-import { NSpace, NTag, NCard, NDataTable, NButton, NDrawer, NDrawerContent, NDescriptions, NDescriptionsItem, NCode, useMessage, NSelect, NInput, NGrid, NGi, NDatePicker } from 'naive-ui';
+import { NSpace, NTag, NCard, NDataTable, NButton, NDrawer, NDrawerContent, NDescriptions, NDescriptionsItem, NCode, useMessage, NSelect, NGrid, NGi, NDatePicker } from 'naive-ui';
 import { fetchLogList, exportLogsCsv, fetchModelList } from '@/service/api';
 import { request } from '@/service/request';
 import type { DataTableColumns } from 'naive-ui';

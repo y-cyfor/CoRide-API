@@ -32,9 +32,3 @@ export function fetchRefreshToken(refreshToken: string) {
   });
 }
 
-/**
- * return custom backend error
- */
-export function fetchCustomBackendError(code: string, msg: string) {
-  return request({ url: '/auth/error', params: { code, msg } });
-}

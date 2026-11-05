@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useAuthStore } from '@/store/modules/auth';
-import { NCard, NSpace, NStatistic, NTag, NSelect, NButton, NGrid, NGi, NInputNumber } from 'naive-ui';
+import { NCard, NSpace, NStatistic, NSelect, NButton, NGrid, NGi, NInputNumber } from 'naive-ui';
 import { fetchUsageStats, fetchDashboardStats, fetchChannelList, fetchModelList } from '@/service/api';
 import { request } from '@/service/request';
 import * as echarts from 'echarts';

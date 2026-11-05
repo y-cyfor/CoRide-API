@@ -1,4 +1,4 @@
-use chrono::{Duration, Utc};
+use chrono::{TimeDelta, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 
@@ -16,7 +16,7 @@ pub fn generate_token(user_id: i64, username: &str, role: &str, secret: &str, ex
         user_id,
         username: username.to_string(),
         role: role.to_string(),
-        exp: (now + Duration::seconds(expires_in_secs)).timestamp(),
+        exp: (now + TimeDelta::seconds(expires_in_secs)).timestamp(),
     };
 
     encode(

@@ -5,111 +5,186 @@ use axum::{
     extract::{Request, State},
     http::{header, StatusCode},
     middleware::Next,
-    response::Response,
+    response::{IntoResponse, Response},
 };
 use serde_json::json;
-use thiserror::Error;
 
+use crate::db::models;
 use crate::AppState;
 
-/// Errors that can occur during API key authentication.
-#[derive(Error, Debug)]
-pub enum AuthError {
-    #[error("Missing or invalid Authorization header")]
-    MissingHeader,
-    #[error("Invalid API key")]
-    InvalidKey,
-    #[error("User account is disabled")]
-    Disabled,
-    #[error("Database error: {0}")]
-    Db(#[from] sqlx::Error),
+/// Everything the proxy needs to know about the caller after authentication.
+#[derive(Debug, Clone)]
+pub struct AuthContext {
+    pub user_id: i64,
+    pub role: String,
+    /// Raw API key used for this request (stored on request logs).
+    pub api_key: String,
+    /// `user_keys.id` when the key came from the key table.
+    pub key_id: Option<i64>,
+    /// Model allow-list; `None` means "all models".
+    pub allowed_models: Option<Vec<String>>,
 }
 
-impl AuthError {
-    /// Convert the error into an HTTP response with the standard API format.
-    pub fn into_response(&self) -> Response {
-        let (status, message): (StatusCode, &str) = match self {
-            AuthError::MissingHeader => (StatusCode::UNAUTHORIZED, "Missing or invalid Authorization header"),
-            AuthError::InvalidKey => (StatusCode::UNAUTHORIZED, "Invalid API key"),
-            AuthError::Disabled => (StatusCode::FORBIDDEN, "User account is disabled"),
-            AuthError::Db(e) => {
-                let body = json!({
-                    "code": 500,
-                    "message": format!("Internal error: {e}"),
-                    "data": null,
-                });
-                return Response::builder()
-                    .status(StatusCode::INTERNAL_SERVER_ERROR)
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(body.to_string()))
-                    .unwrap();
+impl AuthContext {
+    /// Check the model allow-list.
+    ///
+    /// An empty list or a `*` entry allows everything, matching the documented
+    /// "empty = unrestricted" behaviour of `enabled_models`.
+    pub fn allows_model(&self, model: &str) -> bool {
+        match &self.allowed_models {
+            None => true,
+            Some(list) => {
+                list.iter().any(|allowed| {
+                    allowed == "*" || allowed == model
+                })
             }
-        };
-        let body = json!({
-            "code": status.as_u16(),
-            "message": message,
-            "data": null,
-        });
-        Response::builder()
-            .status(status)
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(body.to_string()))
-            .unwrap()
+        }
     }
 }
 
-/// Extract the bearer token from the Authorization header.
-fn extract_bearer_token(request: &Request<Body>) -> Option<String> {
-    let auth_header = request.headers().get(header::AUTHORIZATION)?;
-    let auth_str = auth_header.to_str().ok()?;
-    auth_str.strip_prefix("Bearer ").map(String::from)
+/// Extract an API key from `Authorization: Bearer` or `x-api-key`.
+///
+/// Anthropic SDKs send `x-api-key`, OpenAI SDKs send the bearer token; both are accepted
+/// so that clients can point at the proxy without changing their configuration.
+fn extract_api_key(request: &Request<Body>) -> Option<String> {
+    if let Some(value) = request
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        && let Some(token) = value.strip_prefix("Bearer ") {
+            let token = token.trim();
+            if !token.is_empty() {
+                return Some(token.to_string());
+            }
+        }
+
+    if let Some(value) = request
+        .headers()
+        .get("x-api-key")
+        .and_then(|v| v.to_str().ok())
+    {
+        let value = value.trim();
+        if !value.is_empty() {
+            return Some(value.to_string());
+        }
+    }
+
+    None
 }
 
 /// Auth middleware for proxy routes.
-/// Extracts API key from `Authorization: Bearer <key>`, validates the user
-/// exists and is active, then injects `user_id` (i64) and `role` (String)
-/// into request extensions.
+///
+/// Resolves the API key to a user, rejects revoked keys and injects [`AuthContext`].
 pub async fn auth_middleware(
     State(state): State<Arc<AppState>>,
     mut request: Request<Body>,
     next: Next,
 ) -> Response {
-    // Extract API key
-    let api_key = match extract_bearer_token(&request) {
+    let api_key = match extract_api_key(&request) {
         Some(key) => key,
-        None => return AuthError::MissingHeader.into_response(),
-    };
-
-    // Query user by API key — include status so we can distinguish
-    // "key not found" (401) from "user disabled" (403).
-    let result: Result<Option<(i64, String, String)>, _> = sqlx::query_as(
-        "SELECT id, role, status FROM users WHERE api_key = ?",
-    )
-    .bind(&api_key)
-    .fetch_optional(&state.db)
-    .await;
-
-    let row = match result {
-        Ok(Some(row)) => row,
-        Ok(None) => return AuthError::InvalidKey.into_response(),
-        Err(e) => {
-            tracing::error!(error = %e, "Database error during auth");
-            return AuthError::Db(e).into_response();
+        None => {
+            return api_error(
+                StatusCode::UNAUTHORIZED,
+                "missing_api_key",
+                "Provide an API key via 'Authorization: Bearer <key>' or 'x-api-key: <key>'",
+            )
         }
     };
 
-    let (user_id, role, status) = row;
+    let identity = match models::resolve_api_key(&state.db, &api_key).await {
+        Ok(Some(identity)) => identity,
+        Ok(None) => {
+            return api_error(
+                StatusCode::UNAUTHORIZED,
+                "invalid_api_key",
+                "Invalid API key",
+            )
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Database error during API key authentication");
+            return api_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "database_unavailable",
+                "Authentication is temporarily unavailable",
+            );
+        }
+    };
 
-    if status != "active" {
-        return AuthError::Disabled.into_response();
+    if let Some(status) = identity.key_status.as_deref()
+        && status != "active" {
+            return api_error(
+                StatusCode::UNAUTHORIZED,
+                "api_key_revoked",
+                "This API key has been disabled",
+            );
+        }
+
+    if identity.user_status != "active" {
+        return api_error(
+            StatusCode::FORBIDDEN,
+            "user_disabled",
+            "User account is disabled",
+        );
     }
 
-    // Inject user_id, role, and api_key into request extensions
-    request.extensions_mut().insert(user_id);
-    request.extensions_mut().insert(role);
+    let ctx = AuthContext {
+        user_id: identity.user_id,
+        role: identity.role.clone(),
+        api_key: api_key.clone(),
+        key_id: identity.key_id,
+        allowed_models: identity.allowed_models,
+    };
+
+    request.extensions_mut().insert(ctx);
+    // Kept for handlers that extract plain values.
+    request.extensions_mut().insert(identity.user_id);
+    request.extensions_mut().insert(identity.role);
     request.extensions_mut().insert(api_key);
 
     next.run(request).await
 }
 
-// Use `axum::middleware::from_fn_with_state(state, auth_middleware)` directly in router setup.
+/// Build an OpenAI-compatible error response.
+fn api_error(status: StatusCode, code: &str, message: &str) -> Response {
+    let body = json!({
+        "error": {
+            "message": message,
+            "type": "invalid_request_error",
+            "code": code,
+        }
+    });
+    (status, axum::Json(body)).into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ctx(models: Option<Vec<&str>>) -> AuthContext {
+        AuthContext {
+            user_id: 1,
+            role: "user".into(),
+            api_key: "sk-test".into(),
+            key_id: None,
+            allowed_models: models.map(|list| list.into_iter().map(str::to_string).collect()),
+        }
+    }
+
+    #[test]
+    fn missing_list_allows_every_model() {
+        assert!(ctx(None).allows_model("gpt-4o"));
+    }
+
+    #[test]
+    fn list_restricts_models() {
+        let ctx = ctx(Some(vec!["gpt-4o", "claude"]));
+        assert!(ctx.allows_model("gpt-4o"));
+        assert!(ctx.allows_model("claude"));
+        assert!(!ctx.allows_model("gpt-4o-mini"));
+    }
+
+    #[test]
+    fn wildcard_allows_everything() {
+        assert!(ctx(Some(vec!["*"])).allows_model("anything"));
+    }
+}

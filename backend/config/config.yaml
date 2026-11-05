@@ -1,9 +1,14 @@
 # CoRide-API Configuration
+#
+# Every value can be overridden with an environment variable (see .env.example):
+#   CORIDE_PORT, CORIDE_DB_PATH, CORIDE_ADMIN_USERNAME, CORIDE_ADMIN_PASSWORD,
+#   CORIDE_JWT_SECRET, CORIDE_LOG_LEVEL, CORIDE_ENCRYPTION_SECRETS,
+#   CORIDE_TRUSTED_PROXIES, CORIDE_HEALTH_CHECK_ENABLED
 
 server:
   port: 8000
   host: "0.0.0.0"
-  # CORS allowed origins. Set to empty list [] to restrict, or omit/null to allow all (backwards compatible).
+  # CORS allowed origins. Set to a list to restrict, or leave null to allow all.
   # Example: ["https://example.com", "https://admin.example.com"]
   cors_allowed_origins: null
 
@@ -25,12 +30,43 @@ log:
   max_records: 100000
 
 proxy:
+  # Default upstream timeout in milliseconds (per channel override wins).
   timeout: 300000
   max_retries: 1
   log_request_body: false
   log_response_body: false
+  # Only trust X-Real-IP from these addresses (the bundled nginx runs on localhost).
+  trusted_proxies:
+    - "127.0.0.1"
+    - "::1"
 
 global_rate_limit:
   qps: 100
   concurrency: 50
+  # reject | queue
   action: "reject"
+
+channel_queue:
+  # 0 = unlimited; otherwise at most this many in-flight requests per channel.
+  max_concurrent: 2
+  max_retries: 5
+  delay_min_ms: 100
+  delay_max_ms: 2000
+
+security:
+  # Secrets used to encrypt channel API keys at rest (AES-256-GCM).
+  # The first entry encrypts new values; every entry is tried when decrypting, so a
+  # secret can be rotated by prepending the new one and keeping the old one here.
+  # Leave empty to fall back to jwt.secret (backwards compatible).
+  # Recommended: CORIDE_ENCRYPTION_SECRETS="new-secret,old-secret"
+  encryption_secrets: []
+
+health_check:
+  # Set enabled: false to disable automatic channel probing entirely.
+  enabled: true
+  interval_secs: 300
+  # Disable a channel after this many consecutive failures; it is re-probed
+  # automatically and re-enabled once it recovers.
+  failure_threshold: 3
+  timeout_secs: 10
+

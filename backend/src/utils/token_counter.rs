@@ -45,13 +45,13 @@ mod tests {
     fn test_english_text() {
         // "Hello world" = 11 chars, ~3 tokens at 4 chars/token
         let tokens = estimate_tokens("Hello world");
-        assert!(tokens >= 2 && tokens <= 5);
+        assert!((2..=5).contains(&tokens));
     }
 
     #[test]
     fn test_cjk_text() {
         // "你好世界" = 4 CJK chars, ~3 tokens at 1.5 chars/token
         let tokens = estimate_tokens("你好世界");
-        assert!(tokens >= 2 && tokens <= 5);
+        assert!((2..=5).contains(&tokens));
     }
 }

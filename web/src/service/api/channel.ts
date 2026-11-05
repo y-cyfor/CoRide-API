@@ -2,7 +2,7 @@ import { request } from '../request';
 
 /** Get channel list with pagination */
 export function fetchChannelList(page = 1, pageSize = 20) {
-  return request<Api.Channel.Channel[]>({
+  return request<Api.Common.PageResult<Api.Channel.Channel>>({
     url: '/admin/channels',
     method: 'get',
     params: { page, page_size: pageSize }
@@ -37,7 +37,7 @@ export function fetchUpdateChannel(id: number, data: Partial<Api.Channel.CreateC
 
 /** Test channel connectivity */
 export function fetchTestChannel(id: number) {
-  return request<{ status: string }>({
+  return request<Api.Channel.TestChannelResult>({
     url: `/admin/channels/${id}/test`,
     method: 'post'
   });

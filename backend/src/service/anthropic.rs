@@ -1,57 +1,58 @@
 use serde_json::Value;
 
-/// Extract token usage from an Anthropic-compatible response.
-/// Returns (prompt_tokens, completion_tokens, total_tokens).
+/// Extract token usage from an Anthropic-compatible response payload.
+///
+/// Cache counters are folded into the prompt count so quota accounting reflects the
+/// full input the upstream billed for.
+pub fn extract_tokens_value(parsed: &Value) -> (i32, i32, i32) {
+    let Some(usage) = parsed.get("usage").filter(|u| !u.is_null()) else {
+        return (0, 0, 0);
+    };
+
+    let input = i32_field(usage, "input_tokens");
+    let cache_read = i32_field(usage, "cache_read_input_tokens");
+    let cache_write = i32_field(usage, "cache_creation_input_tokens");
+    let output = i32_field(usage, "output_tokens");
+
+    let prompt = input + cache_read + cache_write;
+    (prompt, output, prompt + output)
+}
+
+fn i32_field(value: &Value, key: &str) -> i32 {
+    value
+        .get(key)
+        .and_then(Value::as_i64)
+        .map(|v| v.clamp(0, i32::MAX as i64) as i32)
+        .unwrap_or(0)
+}
+
+/// Extract token usage from an Anthropic-compatible response body.
 pub fn extract_tokens(response_body: &str) -> (i32, i32, i32) {
-    let parsed: Value = match serde_json::from_str(response_body) {
-        Ok(v) => v,
-        Err(_) => return (0, 0, 0),
-    };
-
-    if let Some(usage) = parsed.get("usage") {
-        let prompt = usage.get("input_tokens").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-        let completion = usage.get("output_tokens").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-        let total = prompt + completion;
-        return (prompt, completion, total);
+    match serde_json::from_str::<Value>(response_body) {
+        Ok(parsed) => extract_tokens_value(&parsed),
+        Err(_) => (0, 0, 0),
     }
-
-    // For streaming responses, tokens are reported in the final delta
-    (0, 0, 0)
 }
 
-/// Check if a response body indicates a streaming response.
-pub fn is_streaming_response(response_body: &str) -> bool {
-    let parsed: Value = match serde_json::from_str(response_body) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    // Check for streaming event types or stream field
-    if let Some(event_type) = parsed.get("type").and_then(|v| v.as_str()) {
-        return matches!(
-            event_type,
-            "message_start" | "content_block_start" | "content_block_delta"
-            | "content_block_stop" | "message_delta" | "message_stop"
-            | "ping"
-        );
+    #[test]
+    fn reads_plain_usage() {
+        let body = r#"{"usage":{"input_tokens":10,"output_tokens":5}}"#;
+        assert_eq!(extract_tokens(body), (10, 5, 15));
     }
 
-    // Also check if stream field is true
-    parsed.get("stream").and_then(|v| v.as_bool()) == Some(true)
-}
-
-/// Parse an Anthropic SSE stream chunk.
-pub fn parse_stream_chunk(chunk: &[u8]) -> Option<Value> {
-    let text = std::str::from_utf8(chunk).ok()?;
-    for line in text.lines() {
-        if let Some(data) = line.strip_prefix("data: ") {
-            if data == "[DONE]" {
-                return None;
-            }
-            if let Ok(json) = serde_json::from_str::<Value>(data) {
-                return Some(json);
-            }
-        }
+    #[test]
+    fn folds_cache_counters_into_prompt() {
+        let body = r#"{"usage":{"input_tokens":10,"cache_read_input_tokens":20,"cache_creation_input_tokens":5,"output_tokens":5}}"#;
+        assert_eq!(extract_tokens(body), (35, 5, 40));
     }
-    None
+
+    #[test]
+    fn missing_usage_yields_zero() {
+        assert_eq!(extract_tokens(r#"{"type":"message"}"#), (0, 0, 0));
+        assert_eq!(extract_tokens("oops"), (0, 0, 0));
+    }
 }

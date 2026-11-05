@@ -2,7 +2,7 @@ import { request } from '../request';
 
 /** Get app profile list with pagination */
 export function fetchAppProfileList(page = 1, pageSize = 20) {
-  return request<Api.AppProfile.AppProfile[]>({
+  return request<Api.Common.PageResult<Api.AppProfile.AppProfile>>({
     url: '/admin/app-profiles',
     method: 'get',
     params: { page, page_size: pageSize }

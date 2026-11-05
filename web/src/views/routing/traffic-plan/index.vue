@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, h, computed, onMounted } from 'vue';
+import { ref, h, onMounted } from 'vue';
 import {
   NButton, NTag, NSpace, NForm, NFormItem, NSelect,
   NInputNumber, NCard, NDataTable, useDialog, useMessage, NPopconfirm
@@ -50,26 +50,16 @@ const hourOptions = Array.from({ length: 25 }, (_, i) => ({
   value: i
 }));
 
-// Available app options for selector (exclude already selected apps in this slot)
-function getAvailableApps(excludeId: number): Array<{ label: string; value: number }> {
-  return profileOptions.value;
-}
-
 // Calculate weight sum for a slot
 function slotWeightSum(slot: EditingTimeSlot): number {
   return slot.apps.reduce((sum, a) => sum + a.weight, 0);
-}
-
-// Check time range overlap
-function hasOverlap(slots: EditingTimeSlot[], excludeId: number, start: number, end: number): boolean {
-  return slots.some(s => s.id !== excludeId && s.start_hour < end && s.end_hour > start);
 }
 
 // Time slot table columns (global)
 const timeSlotColumns: DataTableColumns<Api.TrafficPlan.Slot> = [
   { title: '时段', key: 'time_range', width: 160, render: row => `${row.start_hour}:00 - ${row.end_hour}:00` },
   { title: '应用', key: 'app_profile_name', width: 140 },
-  { title: '比例', key: 'weight', width: 80, render: row => `${row.weight}%` },
+  { title: '权重', key: 'weight', width: 80, render: row => `${row.weight}` },
 ];
 
 // Channel plan columns
@@ -87,13 +77,6 @@ const channelPlanColumns: DataTableColumns<Api.TrafficPlan.PlanDetail> = [
       ]
     })
   }
-];
-
-// Channel editing slot columns
-const channelTimeSlotColumns: DataTableColumns<Api.TrafficPlan.Slot> = [
-  { title: '时段', key: 'time_range', width: 160, render: row => `${row.start_hour}:00 - ${row.end_hour}:00` },
-  { title: '应用', key: 'app_profile_name', width: 140 },
-  { title: '比例', key: 'weight', width: 80, render: row => `${row.weight}%` },
 ];
 
 // Load data
@@ -169,8 +152,7 @@ function addAppToSlot(slot: EditingTimeSlot) {
     message.warning('没有更多可选应用');
     return;
   }
-  const remaining = 100 - slotWeightSum(slot);
-  slot.apps.push({ app_profile_id: available[0].value, weight: remaining > 0 ? remaining : 10 });
+  slot.apps.push({ app_profile_id: available[0].value, weight: 1 });
 }
 
 function removeAppFromSlot(slot: EditingTimeSlot, appIdx: number) {
@@ -192,11 +174,6 @@ async function saveGlobalPlan() {
     }
     if (slot.apps.length === 0) {
       message.warning(`时段${i + 1} 请至少添加一个应用`);
-      return;
-    }
-    const weightSum = slotWeightSum(slot);
-    if (weightSum !== 100) {
-      message.warning(`时段${i + 1} 的应用比例之和必须为 100%，当前为 ${weightSum}%`);
       return;
     }
     for (const app of slot.apps) {
@@ -291,8 +268,7 @@ function removeChannelTimeSlot(idx: number) {
 }
 
 function addAppToChannelSlot(slot: EditingTimeSlot) {
-  const remaining = 100 - slotWeightSum(slot);
-  slot.apps.push({ app_profile_id: profileOptions.value[0]?.value || 0, weight: remaining > 0 ? remaining : 10 });
+  slot.apps.push({ app_profile_id: profileOptions.value[0]?.value || 0, weight: 1 });
 }
 
 function removeAppFromChannelSlot(slot: EditingTimeSlot, appIdx: number) {
@@ -317,11 +293,6 @@ async function saveChannelPlan() {
     }
     if (slot.apps.length === 0) {
       message.warning(`时段${i + 1} 请至少添加一个应用`);
-      return;
-    }
-    const weightSum = slotWeightSum(slot);
-    if (weightSum !== 100) {
-      message.warning(`时段${i + 1} 的应用比例之和必须为 100%，当前为 ${weightSum}%`);
       return;
     }
   }
@@ -415,21 +386,19 @@ onMounted(() => {
             <div style="margin-bottom: 8px;">
               <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 4px; padding: 0 8px;">
                 <span style="font-size: 12px; color: #999; flex: 1;">应用</span>
-                <span style="font-size: 12px; color: #999; width: 120px;">比例(%)</span>
+                <span style="font-size: 12px; color: #999; width: 120px;">权重</span>
                 <span style="width: 50px;"></span>
               </div>
               <div v-for="(app, aIdx) in slot.apps" :key="aIdx" style="display: flex; gap: 12px; align-items: center; margin-bottom: 4px; padding: 0 8px;">
                 <NSelect v-model:value="app.app_profile_id" :options="profileOptions" style="width: 220px;" placeholder="选择应用" />
-                <NInputNumber v-model:value="app.weight" :min="1" :max="100" :style="{ width: '120px' }" placeholder="比例" />
+                <NInputNumber v-model:value="app.weight" :min="1" :style="{ width: '120px' }" placeholder="权重" />
                 <NButton size="tiny" type="error" text @click="removeAppFromSlot(slot, aIdx)">删除</NButton>
               </div>
             </div>
             <NSpace>
               <NButton size="tiny" @click="addAppToSlot(slot)">+ 添加应用</NButton>
               <span v-if="slot.apps.length > 0" style="font-size: 12px; color: #666;">
-                合计: {{ slotWeightSum(slot) }}%
-                <span v-if="slotWeightSum(slot) !== 100" style="color: #e80c47;">（必须为 100%）</span>
-                <span v-else style="color: #18a058;">✓</span>
+                权重合计: {{ slotWeightSum(slot) }}
               </span>
             </NSpace>
           </div>
@@ -480,21 +449,19 @@ onMounted(() => {
             <div style="margin-bottom: 8px;">
               <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 4px; padding: 0 8px;">
                 <span style="font-size: 12px; color: #999; flex: 1;">应用</span>
-                <span style="font-size: 12px; color: #999; width: 120px;">比例(%)</span>
+                <span style="font-size: 12px; color: #999; width: 120px;">权重</span>
                 <span style="width: 50px;"></span>
               </div>
               <div v-for="(app, aIdx) in slot.apps" :key="aIdx" style="display: flex; gap: 12px; align-items: center; margin-bottom: 4px; padding: 0 8px;">
                 <NSelect v-model:value="app.app_profile_id" :options="profileOptions" style="width: 220px;" placeholder="选择应用" />
-                <NInputNumber v-model:value="app.weight" :min="1" :max="100" :style="{ width: '120px' }" placeholder="比例" />
+                <NInputNumber v-model:value="app.weight" :min="1" :style="{ width: '120px' }" placeholder="权重" />
                 <NButton size="tiny" type="error" text @click="removeAppFromChannelSlot(slot, aIdx)">删除</NButton>
               </div>
             </div>
             <NSpace>
               <NButton size="tiny" @click="addAppToChannelSlot(slot)">+ 添加应用</NButton>
               <span v-if="slot.apps.length > 0" style="font-size: 12px; color: #666;">
-                合计: {{ slotWeightSum(slot) }}%
-                <span v-if="slotWeightSum(slot) !== 100" style="color: #e80c47;">（必须为 100%）</span>
-                <span v-else style="color: #18a058;">✓</span>
+                权重合计: {{ slotWeightSum(slot) }}
               </span>
             </NSpace>
           </div>

@@ -963,3 +963,220 @@ async function loadChannels() {
 | 未修复（暂不实施） | 13 |
 | 未修复（影响极小） | 1 |
 | **缺陷总计** | **96** |
+
+---
+
+## 十四、2026-05-11 全项目审查修复
+
+### BUG-028: IP 欺骗漏洞 — X-Real-IP 无条件信任 ✅ CRITICAL
+- **文件**: `backend/src/middleware/ip_filter.rs`, `backend/src/config.rs`, `backend/config/config.yaml`
+- **修复**: `extract_client_ip()` 仅在 `remote_addr` 匹配 `trusted_proxies` 列表时信任 `X-Real-IP`。`ProxyConfig` 添加 `trusted_proxies` 配置项，默认信任 `127.0.0.1` / `::1`
+
+### BUG-029: AES-GCM Nonce 非安全随机数 ✅ CRITICAL
+- **文件**: `backend/src/utils/encrypt.rs`, `backend/Cargo.toml`
+- **修复**: 将 `fastrand::u8()` 替换为 `getrandom::getrandom()` 生成加密安全 nonce。移除 `fastrand` 依赖
+
+### BUG-030: user_keys 多 Key 系统接入认证 ✅ HIGH
+- **文件**: `backend/src/middleware/auth.rs`
+- **修复**: 认证 SQL 改为 `UNION ALL` 同时匹配 `users.api_key` 和 `user_keys.key_value`
+
+### BUG-031: set_log_level 运行时热重载 ✅ HIGH
+- **文件**: `backend/src/main.rs`, `backend/src/lib.rs`, `backend/src/state/app_state.rs`, `backend/src/router/admin_routes.rs`
+- **修复**: 使用 `tracing_subscriber::reload::Layer` 实现日志级别运行时热重载，不再需要重启
+
+### BUG-039: list_all_traffic_plans N+1 查询 ✅ HIGH
+- **文件**: `backend/src/db/models.rs`
+- **修复**: 将 N+1 循环查询改为单次 `JOIN ... WHERE plan_id IN (...)` 批量查询后在 Rust 中分组
+
+### BUG-040: 用户列表配额聚合 N+1 查询 ✅ HIGH
+- **文件**: `backend/src/router/admin_routes.rs`
+- **修复**: 批量查询 `WHERE user_id IN (...)` 替代逐个查询，20 次查询变为 1 次
+
+### BUG-032: YAML 配置文本替换脆弱 ✅ MEDIUM
+- **文件**: `backend/src/router/admin_routes.rs`
+- **修复**: 将字符串 `replace` 替换为 `serde_yaml::from_str` + `to_string` 正确序列化
+
+### BUG-033: 重试逻辑错误重试 4xx ✅ MEDIUM
+- **文件**: `backend/src/router/proxy_routes.rs`
+- **修复**: 删除了多余的 `|| ==400 || ==401 || ==403` 条件，只保留 `< 500` 判断（400/401/403 已在 <500 范围内）
+
+### BUG-034: CSV 导出注入风险 ✅ MEDIUM
+- **文件**: `backend/src/router/admin_routes.rs`
+- **修复**: 添加 `csv_escape()` 函数，对含逗号/引号/换行的字段正确转义。API Key 脱敏显示（>20字符时截断）
+
+### BUG-035: Token 键名绕过存储抽象层 ✅ MEDIUM
+- **文件**: `web/src/service/api/log.ts`
+- **修复**: 将 `localStorage.getItem('CORIDE_token')` 改为 `localStg.get('token')`
+
+### BUG-036: retentionDays 只展示不保存 ✅ MEDIUM
+- **文件**: `backend/src/router/admin_routes.rs`, `web/src/views/settings/index.vue`
+- **修复**: `SetLogLevelRequest` 添加 `retention_days` 字段，前端同步发送，后端写入 config.yaml
+
+### BUG-037: 管理员日志端点缺时间筛选 ✅ MEDIUM
+- **文件**: `backend/src/db/models.rs`, `backend/src/router/admin_routes.rs`
+- **修复**: `list_logs` 函数添加 `start_time`/`end_time` 参数，SQL 增加 `created_at >= ? AND created_at <= ?` 条件
+
+### BUG-038: Token 存储键硬编码 ✅ LOW
+- **文件**: `web/src/utils/storage.ts`
+- **修复**: 添加 `STG_KEY` 常量对象，提供统一的键名引用
+
+### BUG-042~045: 缺失性能索引 ✅ MEDIUM
+- **文件**: `backend/src/db/migrations/015_perf_indexes.sql` (新建)
+- **修复**: 创建 4 个联合索引 `idx_quotas_user_enabled`、`idx_rate_limit_target`、`idx_models_proxy_enabled`、`idx_models_channel_enabled`
+
+### BUG-046: tower-http 未使用 features ✅ LOW
+- **文件**: `backend/Cargo.toml`
+- **修复**: 移除 `fs` 和 `compression-br` features
+
+### BUG-047: chrono::Duration 弃用 ✅ LOW
+- **文件**: `backend/src/utils/jwt.rs`, `backend/src/state/app_state.rs`
+- **修复**: `Duration` → `TimeDelta`
+
+### BUG-052~058: models.rs 死代码删除 ✅ LOW
+- **文件**: `backend/src/db/models.rs`
+- **修复**: 删除 7 个 `get_*_list` 函数、`get_model_by_proxy_name`、`get_channel_by_model`、`get_channel_api_key`（与 proxy.rs 重复）、`get_models_by_channel`、`get_app_profile_by_identifier`，约 180 行死代码
+
+### BUG-059: rand_delay_ms 随机性增强 ✅ LOW
+- **文件**: `backend/src/router/proxy_routes.rs`
+- **修复**: 使用混合熵源（时间戳+纳秒+进程 ID）改进伪随机数种子
+
+### BUG-060: is_streaming_response 死代码删除 ✅ LOW
+- **文件**: `backend/src/service/anthropic.rs`
+- **修复**: 删除未调用的函数
+
+### BUG-061: log_request_body/log_response_body 截断后丢弃 ✅ LOW
+- **文件**: `backend/src/service/proxy.rs`, `backend/src/router/proxy_routes.rs`
+- **修复**: 移除两个未使用的参数及对应的截断代码
+
+### BUG-062~068: 前端未使用的导入清理 ✅ LOW
+- **文件**: 7 个 `.vue` 文件
+- **修复**: 移除 `computed`、`NInputNumber`、`NCascader`、`NInput`、`NSwitch`、`NTag` 等未使用的导入
+
+### BUG-069: auth.d.ts 类型重复 ✅ LOW
+- **文件**: `web/src/typings/api/auth.d.ts`
+- **修复**: 删除整个文件（与 coride.d.ts 中的类型声明完全重复）
+
+### BUG-070: fetchCustomBackendError 死代码 ✅ LOW
+- **文件**: `web/src/service/api/auth.ts`
+- **修复**: 删除未调用的 SoybeanAdmin 模板遗留函数
+
+### BUG-071: demoRequest 死代码 ✅ LOW
+- **文件**: `web/src/service/request/index.ts`
+- **修复**: 删除未使用的 demo API 实例
+
+### BUG-072: 登录页无用模块导入 ✅ LOW
+- **文件**: `web/src/views/_builtin/login/index.vue`
+- **修复**: 移除 CodeLogin/Register/ResetPwd/BindWechat 导入和 moduleMap 注册
+
+### BUG-074~075: traffic-plan 死代码删除 ✅ LOW
+- **文件**: `web/src/views/routing/traffic-plan/index.vue`
+- **修复**: 删除未调用的 `getAvailableApps()`、`hasOverlap()`、未使用的 `channelTimeSlotColumns`
+
+### BUG-076: liteproxy.d.ts 重命名 ✅ LOW
+- **文件**: `web/src/typings/api/coride.d.ts`
+- **修复**: `liteproxy.d.ts` → `coride.d.ts`
+
+### BUG-078: insert_request_log 命名统一 ✅ LOW
+- **文件**: `backend/src/db/models.rs`, `backend/src/service/log.rs`
+- **修复**: `insert_request_log` → `create_request_log`
+
+### BUG-079: LP_ 前缀弃用标注 ✅ LOW
+- **文件**: `backend/src/config.rs`
+- **修复**: 添加 `// LP_ prefix is deprecated, use CORIDE_ instead` 注释
+
+### BUG-081: list_ratelimits 添加分页 ✅ LOW
+- **文件**: `backend/src/db/models.rs`, `backend/src/router/admin_routes.rs`
+- **修复**: 添加 `page`/`page_size` 参数，返回 `(items, total)` 分页结构
+
+### BUG-082: 流式 Token 估算注释 ✅ LOW
+- **文件**: `backend/src/router/proxy_routes.rs`
+- **修复**: 添加流式 completions token 无法提前知道的注释说明
+
+### BUG-083~084: 冗余注释删除 ✅ LOW
+- **文件**: `backend/src/middleware/auth.rs`, `backend/src/middleware/rate_limit.rs`
+- **修复**: 删除末尾的调用者说明注释
+
+### BUG-085: health_check 文档注释 ✅ LOW
+- **文件**: `backend/src/main.rs`
+- **修复**: 添加 `/// GET /health — returns system health status including database connectivity.`
+
+### BUG-086: models.rs TODO 标记 ✅ LOW
+- **文件**: `backend/src/db/models.rs`
+- **修复**: 在 `get_user_key_by_value` 上方添加 TODO 注释
+
+### BUG-090: CORS 配置重复消除 ✅ LOW
+- **文件**: `backend/src/main.rs`
+- **修复**: 提取公共 `base` CorsLayer，4 次重复配置合并为 1 次
+
+### BUG-036 extra: settings 页面提示更新 ✅ LOW
+- **文件**: `web/src/views/settings/index.vue`
+- **修复**: 日志级别更新后消息改为"立即生效"，移除重启提示
+
+---
+
+## 最终统计
+
+| 类别 | 数量 |
+|------|------|
+| 已修复 | 131 |
+| 未修复（设计如此） | 11 |
+| 未修复（暂不实施） | 13 |
+| 未修复（影响极小） | 1 |
+| **缺陷总计** | **156** |
+---
+
+## 十五、2026-11-06 P0/P1 全量修复
+
+> 依据 `docs/review-2026-11-06.md` 的全量代码审查，修复 7 项 P0 + 15 项 P1，
+> 每项均有对应的自动化测试。测试入口：`python tests/run_tests.py`。
+
+### P0（阻断级）
+
+| 编号 | 问题 | 修复 | 验证 |
+|------|------|------|------|
+| P0-1 | 前端 `traffic-plan/index.vue` 多余 `}` 导致 `vue-tsc`/`vite build` 失败 | 删除多余闭合括号 | `pnpm typecheck` / `pnpm build` |
+| P0-2 | 健康检查把加密后的 Key 发给上游 → 约 10 分钟全渠道被自动禁用且永不自愈 | 探测前解密；`/models` 404/405 视为"无法判断"不计失败；429 不计失败；被自动禁用的渠道继续探测并自动恢复；新增 `health_check.enabled/interval_secs/failure_threshold/timeout_secs` 配置；跳过无法解密的渠道 | `test_health_check_keeps_encrypted_channels`、`test_health_check_disables_then_recovers` |
+| P0-3 | 渠道配额从不写周期 → 永不复位；`requests` 类型按 Token 扣 → 半天内卡死 | 创建/更新渠道写入周期；`deduct_channel_quota` 按 `quota_type` 计 1 次或 N Token；周期缺失时补初始化；迁移 016 一次性修正历史卡死数据 | `test_channel_request_quota_counts_requests_and_resets`、`test_channel_token_quota_counts_tokens` |
+| P0-4 | 全局并发计数在客户端中断/panic 时泄漏（永久 429）；流式又在返回响应头时提前释放 | 改为 RAII `ConcurrencyGuard`，并把 guard 移入流式任务，流结束才释放 | `test_global_concurrency_slots_are_released`、`test_cancelled_stream_releases_slot`、`test_concurrent_stream_holds_slot` |
+| P0-5 | 代理错误一律 HTTP 200；非流式成功被包成 `{code,data}` | 错误返回真实状态码 + OpenAI/Anthropic 协议错误体；非流式响应原样透传 | `test_proxy_non_stream_passthrough`、`test_proxy_error_status_codes`、`test_anthropic_error_shape` |
+| P0-6 | 流式不判断上游状态、失败也扣费、不跨渠道重试 | 非 2xx 转为 `UpstreamStatus` 并切换渠道；仅计费真实产生的用量；记录真实状态与耗时 | `test_streaming_error_is_not_charged`、`test_streaming_falls_back_to_second_channel` |
+| P0-7 | 没有任何上游超时，挂起请求占满并发 | 非流式使用渠道 `timeout`；流式改用"分片空闲超时"，避免长生成被总时长掐断 | `test_upstream_timeout_is_bounded`、`test_stream_idle_timeout_terminates` |
+
+### P1（功能失效）
+
+| 编号 | 问题 | 修复 | 验证 |
+|------|------|------|------|
+| P1-1 | 用户 IP 白名单永不生效（ip_filter 在 auth 之前） | 拆分为 `ip_blocklist`（认证前）与 `ip_whitelist`（认证后），并修正 layer 顺序 | `test_ip_whitelist_enforced_after_auth` |
+| P1-2 | 模型权限未强制（`enabled_models` 只影响列表） | 认证阶段解析 Key/用户模型白名单，代理入口强制校验，403 拒绝 | `test_model_permission_is_enforced`、`test_key_level_model_permission` |
+| P1-3 | 限流管理页为空壳 | 载入 `rate_limit_configs` 快照，用户级/渠道级 QPS 与并发生效，支持 `reject`/`queue`，全局配置即时生效 | `test_user_qps_limit_enforced`、`test_channel_qps_limit_falls_back_to_other_channel`、`test_queue_action_waits_instead_of_rejecting` |
+| P1-4 | 多 Key 请求无法归属到用户 | `request_logs` 增加 `user_id/key_id`，统计按用户全部密钥匹配（兼容历史数据） | `test_multi_key_requests_are_attributed_to_the_user` |
+| P1-5 | 禁用/删除 Key 无效 | 认证时优先匹配 `user_keys` 行并检查状态，支持吊销；主 Key 行禁止删除（可禁用） | `test_disabled_key_is_rejected`、`test_primary_key_cannot_be_deleted` |
+| P1-6 | 用户 Token 图表永远为空（`GROUP BY day` 无别名） | 修正 SQL 别名 | `test_user_token_chart_is_not_empty` |
+| P1-7 | 用户日志状态码筛选永远 0 条（类型不匹配） | 改为 `CAST(status_code AS TEXT) LIKE ?` | `test_user_logs_status_filter_works` |
+| P1-8 | 模型映射未生效（上游收到代别名） | 按渠道把 `model` 改写为 `source_name` | `test_model_mapping_is_per_channel` |
+| P1-9 | 渠道不轮询、API Key 不轮询 | 加权随机排序渠道；渠道内 Key 轮询 | `test_weighted_channel_distribution`、`test_api_key_rotation_across_multiple_keys` |
+| P1-10 | 渠道配额耗尽直接 402，不换渠道 | 渠道配额/渠道限流失败时继续尝试下一个渠道 | `test_channel_quota_exhaustion_falls_back_to_other_channel` |
+| P1-11 | Anthropic 缺少 `anthropic-version`；不支持 `x-api-key` 入站 | 默认注入版本头；入站同时接受 Bearer 与 `x-api-key` | `test_anthropic_stream_records_cache_tokens`、`test_anthropic_accepts_x_api_key` |
+| P1-12 | CIDR 只校验不匹配 | 新增 `utils/ip.rs` 实现 IPv4/IPv6 CIDR 匹配与规范化 | `test_ip_blacklist_supports_cidr`、`test_ip_whitelist_accepts_cidr` |
+| P1-13 | 加密密钥派生自 JWT_SECRET，轮换即数据不可逆损坏 | 引入 `KeyRing`：多密钥、`enc:v1:` 前缀、独立 `CORIDE_ENCRYPTION_SECRETS`；解密失败时明确报错且拒绝二次加密 | `test_encryption_key_rotation_keeps_channels_working`、`test_wrong_encryption_secret_fails_loudly` |
+| P1-14 | 流式日志 `elapsed_ms=0` 污染 P95 | 流式结束时记录真实耗时 | `test_full_lifecycle_non_stream_and_stream` |
+| P1-15 | 管理端日志无法翻页（缺 total） | 返回 `{items,total}` 并支持按用户/Key 过滤 | `test_admin_logs_paginate_and_filter_by_user` |
+
+### 附带修复
+
+- 渠道测试接口按字节截断导致中文错误信息 panic → 改为按字符截断（`test_channel_test_endpoint_is_panic_safe_with_cjk_error`）
+- 登录限流把 nginx 后的所有请求当作同一 IP → 改为可信代理感知的真实 IP（`test_login_rate_limit_blocks_brute_force`）
+- `retention_days` 运行时修改不生效 → 改为原子变量，清理任务每次读取（`test_retention_days_applies_and_persists`）
+- 全局限流"保存后需重启" → 写入数据库即时生效（`test_global_rate_limit_applies_immediately_and_persists`）
+- SQLite 未开 WAL/busy_timeout → 开启并测试（`test_sqlite_runs_in_wal_mode`）
+- nginx 未限制请求体/超时、SSE 被缓冲 → 补齐配置
+- 管理端错误响应返回 200 → 改为真实状态码（所有 400/404/409 断言）
+
+### 统计
+
+| 类别 | 数量 |
+|------|------|
+| 本轮修复 | 22（P0×7 + P1×15） |
+| 附带修复 | 8 |
+| 新增单元测试 | 80 |
+| 新增集成测试 | 69 |

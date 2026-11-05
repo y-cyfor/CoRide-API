@@ -2,7 +2,7 @@ import { request } from '../request';
 
 /** Get quota list with pagination */
 export function fetchQuotaList(page = 1, pageSize = 20, userId?: number) {
-  return request<Api.Quota.Quota[]>({
+  return request<Api.Common.PageResult<Api.Quota.Quota>>({
     url: '/admin/quotas',
     method: 'get',
     params: { page, page_size: pageSize, user_id: userId }

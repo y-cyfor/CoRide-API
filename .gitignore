@@ -34,3 +34,9 @@ dev.sh
 
 # Test reports
 vibe/test/
+
+# Integration test artifacts
+tests/*.log
+backend/.testrun/
+backend/target/itest/
+tests/__pycache__/

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, h, onMounted } from 'vue';
-import { NButton, NTag, NSpace, NModal, NForm, NFormItem, NInput, NSelect, useDialog, useMessage } from 'naive-ui';
+import { NButton, NTag, NSpace, NModal, NForm, NFormItem, NSelect, useDialog, useMessage } from 'naive-ui';
 import { fetchQuotaList, fetchCreateQuota, fetchUpdateQuota, fetchDeleteQuota, fetchUserList } from '@/service/api';
 import { fetchChannelList } from '@/service/api/channel';
 import type { DataTableColumns } from 'naive-ui';
@@ -19,7 +19,7 @@ const pagination = ref({
   itemCount: 0,
   showSizePicker: true,
   pageSizes: [10, 20, 50],
-  prefix: ({ itemCount }: { itemCount: number }) => `共 ${itemCount} 条`,
+  prefix: (info: { itemCount?: number }) => `共 ${info.itemCount ?? 0} 条`,
   onChange: (page: number) => {
     pagination.value.page = page;
     loadData();
@@ -58,16 +58,21 @@ const cycleOptions = [
 async function loadUsers() {
   const { data } = await fetchUserList(1, 100);
   if (data) {
-    userOptions.value = data.map(u => ({ label: u.username, value: u.id }));
-    users.value = new Map(data.map((u: any) => [u.id, u.username]));
+    const items = data.items ?? [];
+    userOptions.value = items.map(u => ({ label: u.username, value: u.id }));
+    users.value = new Map(items.map(u => [u.id, u.username]));
   }
 }
 
 async function loadChannels() {
   const { data } = await fetchChannelList(1, 100);
   if (data) {
-    channelOptions.value = [{ label: '全部（用户级配额）', value: 0 }, ...data.map(c => ({ label: c.name, value: c.id }))];
-    channels.value = new Map(data.map((c: Api.Channel.Channel) => [c.id, c.name]));
+    const items = data.items ?? [];
+    channelOptions.value = [
+      { label: '全部（用户级配额）', value: 0 },
+      ...items.map(c => ({ label: c.name, value: c.id }))
+    ];
+    channels.value = new Map(items.map(c => [c.id, c.name]));
   }
 }
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, h, onMounted, computed, watch } from 'vue';
+import { ref, h, onMounted, watch } from 'vue';
 import { NButton, NTag, NSpace, NModal, NForm, NFormItem, NInput, NInputNumber, NSelect, useDialog, useMessage } from 'naive-ui';
 import { fetchRateLimitList, fetchCreateRateLimit, fetchUpdateRateLimit, fetchDeleteRateLimit, fetchUserList, fetchChannelList } from '@/service/api';
 import type { DataTableColumns } from 'naive-ui';
@@ -101,7 +101,7 @@ async function loadData() {
   loading.value = true;
   const { data, error } = await fetchRateLimitList();
   if (!error && data) {
-    ratelimits.value = data;
+    ratelimits.value = data.items ?? [];
   }
   loading.value = false;
 }

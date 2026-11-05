@@ -17,7 +17,7 @@ const pagination = ref({
   itemCount: 0,
   showSizePicker: true,
   pageSizes: [10, 20, 50],
-  prefix: ({ itemCount }: { itemCount: number }) => `共 ${itemCount} 条`,
+  prefix: (info: { itemCount?: number }) => `共 ${info.itemCount ?? 0} 条`,
   onChange: (page: number) => {
     pagination.value.page = page;
     loadData();
@@ -37,7 +37,8 @@ const formModel = ref<Partial<Api.Channel.CreateChannelParams>>({
   api_keys: '',
   weight: 1,
   timeout: 300000,
-  retry_count: 1
+  retry_count: 1,
+  proxy_url: ''
 });
 const channelEnabled = ref(true);
 
@@ -60,7 +61,25 @@ const columns: DataTableColumns<Api.Channel.Channel> = [
   { title: '模型数', key: 'model_count', width: 70, render: row => (row as any).model_count || 0 },
   { title: '应用伪装', key: 'app_profile_name', width: 100, render: row => (row as any).app_profile_name ? h(NTag, { type: 'default', size: 'small' }, { default: () => (row as any).app_profile_name }) : h('span', { style: 'color: #999' }, '无') },
   { title: '权重', key: 'weight', width: 60 },
-  { title: '状态', key: 'status', width: 80, render: row => h(NTag, { type: row.status === 'active' ? 'success' : 'default' }, { default: () => row.status }) },
+  {
+    title: '状态',
+    key: 'status',
+    width: 150,
+    render: row => {
+      const tags = [
+        h(NTag, { type: row.status === 'active' ? 'success' : 'default' }, { default: () => row.status })
+      ];
+      if (row.auto_disabled) {
+        tags.push(h(NTag, { type: 'warning', size: 'small' }, { default: () => '自动禁用' }));
+      }
+      if (row.api_keys_decryptable === false) {
+        tags.push(
+          h(NTag, { type: 'error', size: 'small' }, { default: () => '密钥无法解密' })
+        );
+      }
+      return h(NSpace, { size: 4 }, { default: () => tags });
+    }
+  },
   {
     title: '健康',
     key: 'consecutive_failures',
@@ -150,15 +169,8 @@ async function loadData() {
   loading.value = true;
   const { data, error } = await fetchChannelList(pagination.value.page, pagination.value.pageSize);
   if (!error && data) {
-    // Backend returns { items: [...], total: N }
-    if (data.items && data.total !== undefined) {
-      channels.value = data.items;
-      pagination.value.itemCount = data.total;
-    } else {
-      // Fallback for old API format
-      channels.value = data;
-      pagination.value.itemCount = data.length;
-    }
+    channels.value = data.items ?? [];
+    pagination.value.itemCount = data.total ?? 0;
   }
   loading.value = false;
 }
@@ -168,7 +180,7 @@ function handleCreate() {
   editingId.value = null;
   formModel.value = {
     name: '', type: 'openai', base_url: '', api_keys: '[]',
-    weight: 1, timeout: 300000, retry_count: 1
+    weight: 1, timeout: 300000, retry_count: 1, proxy_url: ''
   };
   channelEnabled.value = true;
   showModal.value = true;
@@ -187,7 +199,8 @@ function handleEdit(row: Api.Channel.Channel) {
     retry_count: row.retry_count,
     quota_type: row.quota_type,
     quota_limit: row.quota_limit,
-    quota_cycle: row.quota_cycle
+    quota_cycle: row.quota_cycle,
+    proxy_url: row.proxy_url || ''
   };
   channelEnabled.value = row.status === 'active';
   showModal.value = true;
@@ -214,10 +227,16 @@ async function handleSave() {
     apiKeysJson = JSON.stringify([keysRaw]);
   }
 
+  // An empty quota type means "no quota": send null so the backend clears it.
   const payload: Record<string, any> = {
     ...formModel.value,
     api_keys: apiKeysJson,
+    quota_type: formModel.value.quota_type ? formModel.value.quota_type : null,
   };
+  if (!payload.quota_type) {
+    payload.quota_limit = null;
+    payload.quota_cycle = null;
+  }
   if (!isEdit.value) {
     // new channel — no status field needed
   } else {
@@ -330,6 +349,9 @@ onMounted(() => {
         <NFormItem label="重试次数">
           <NInputNumber v-model:value="formModel.retry_count" :min="0" :max="5" />
         </NFormItem>
+        <NFormItem label="代理地址">
+          <NInput v-model:value="formModel.proxy_url" placeholder="http://user:pass@proxy.example.com:8080（可选）" />
+        </NFormItem>
         <NFormItem label="状态" v-if="isEdit">
           <NSwitch v-model:value="channelEnabled">
             <template #checked>启用</template>
@@ -338,7 +360,7 @@ onMounted(() => {
         </NFormItem>
         <NFormItem label="配额类型">
           <NSelect v-model:value="formModel.quota_type" :options="[
-            { label: '无限制', value: null },
+            { label: '无限制', value: '' },
             { label: '请求数', value: 'requests' },
             { label: 'Token数', value: 'tokens' }
           ]" placeholder="选择配额类型" clearable />

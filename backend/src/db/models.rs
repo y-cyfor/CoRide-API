@@ -1,17 +1,41 @@
+use chrono::Timelike;
 use serde::Serialize;
 use sqlx::SqlitePool;
-use chrono::Timelike;
 
-use crate::utils::encrypt;
+use crate::utils::encrypt::{DecryptOutcome, KeyRing};
 
-/// Encrypt channel API keys using the provided encryption key.
-fn maybe_encrypt_api_keys(api_keys: &str, key: &[u8; 32]) -> String {
-    encrypt::encrypt(api_keys, key).unwrap_or_else(|_| api_keys.to_string())
+/// Encrypt channel API keys, falling back to the plaintext value if encryption fails.
+fn maybe_encrypt_api_keys(api_keys: &str, ring: &KeyRing) -> String {
+    match ring.encrypt(api_keys) {
+        Ok(encrypted) => encrypted,
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to encrypt channel API keys, storing plaintext");
+            api_keys.to_string()
+        }
+    }
 }
 
-/// Decrypt channel API keys using the provided encryption key.
-pub fn maybe_decrypt_api_keys(encoded: &str, key: &[u8; 32]) -> String {
-    encrypt::decrypt(encoded, key).unwrap_or_else(|_| encoded.to_string())
+/// Decrypt channel API keys, returning the stored value unchanged when it cannot be
+/// decrypted (legacy plaintext or a rotated encryption secret).
+pub fn maybe_decrypt_api_keys(encoded: &str, ring: &KeyRing) -> String {
+    decrypt_api_keys_checked(encoded, ring).unwrap_or_else(|stored| stored)
+}
+
+/// Decrypt channel API keys, distinguishing failures from plaintext values.
+///
+/// `Err(stored)` means the value looks like ciphertext but no configured key could
+/// open it — callers must not re-save that value (it would be encrypted twice).
+pub fn decrypt_api_keys_checked(encoded: &str, ring: &KeyRing) -> Result<String, String> {
+    match ring.decrypt(encoded) {
+        DecryptOutcome::Decrypted(plain) | DecryptOutcome::Plaintext(plain) => Ok(plain),
+        DecryptOutcome::Failed(stored) => {
+            tracing::error!(
+                "Channel API keys could not be decrypted with any configured key; \
+                 check the encryption secret and key ring configuration"
+            );
+            Err(stored)
+        }
+    }
 }
 
 #[derive(Debug, Clone, sqlx::FromRow, Serialize)]
@@ -57,6 +81,11 @@ pub struct Channel {
     pub quota_period_end: Option<chrono::DateTime<chrono::Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app_profile_id: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proxy_url: Option<String>,
+    /// Set when the health checker disabled this channel (auto-recoverable).
+    #[serde(default)]
+    pub auto_disabled: bool,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
@@ -123,6 +152,10 @@ pub struct RequestLog {
     pub id: i64,
     pub user_api_key: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_id: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub channel_id: Option<i64>,
     pub model: String,
     pub endpoint: String,
@@ -163,21 +196,6 @@ pub async fn get_user_by_username(pool: &SqlitePool, username: &str) -> Result<O
         .await
 }
 
-pub async fn get_user_list(
-    pool: &SqlitePool,
-    page: u32,
-    page_size: u32,
-) -> Result<Vec<User>, sqlx::Error> {
-    let offset = (page - 1) * page_size;
-    sqlx::query_as::<_, User>(
-        "SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?",
-    )
-    .bind(page_size as i64)
-    .bind(offset as i64)
-    .fetch_all(pool)
-    .await
-}
-
 pub async fn list_users(
     pool: &SqlitePool,
     page: i64,
@@ -193,6 +211,7 @@ pub async fn list_users(
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn create_user(
     pool: &SqlitePool,
     username: &str,
@@ -282,21 +301,6 @@ pub async fn get_channel_by_id(pool: &SqlitePool, id: i64) -> Result<Option<Chan
         .await
 }
 
-pub async fn get_channel_list(
-    pool: &SqlitePool,
-    page: u32,
-    page_size: u32,
-) -> Result<Vec<Channel>, sqlx::Error> {
-    let offset = (page - 1) * page_size;
-    sqlx::query_as::<_, Channel>(
-        "SELECT * FROM channels ORDER BY created_at DESC LIMIT ? OFFSET ?",
-    )
-    .bind(page_size as i64)
-    .bind(offset as i64)
-    .fetch_all(pool)
-    .await
-}
-
 pub async fn list_channels(
     pool: &SqlitePool,
     page: i64,
@@ -312,6 +316,7 @@ pub async fn list_channels(
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn create_channel(
     pool: &SqlitePool,
     name: &str,
@@ -326,11 +331,13 @@ pub async fn create_channel(
     quota_limit: Option<i64>,
     quota_cycle: Option<&str>,
     app_profile_id: Option<i64>,
-    enc_key: &[u8; 32],
+    proxy_url: Option<&str>,
+    ring: &KeyRing,
 ) -> Result<i64, sqlx::Error> {
-    let encrypted_keys = maybe_encrypt_api_keys(api_keys, enc_key);
+    let encrypted_keys = maybe_encrypt_api_keys(api_keys, ring);
+    let (period_start, period_end) = crate::service::quota::compute_period(quota_cycle);
     let result = sqlx::query(
-        "INSERT INTO channels (name, type, base_url, api_keys, custom_headers, weight, timeout, retry_count, quota_type, quota_limit, quota_cycle, app_profile_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')",
+        "INSERT INTO channels (name, type, base_url, api_keys, custom_headers, weight, timeout, retry_count, quota_type, quota_limit, quota_cycle, quota_period_start, quota_period_end, app_profile_id, proxy_url, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')",
     )
     .bind(name)
     .bind(channel_type)
@@ -343,12 +350,16 @@ pub async fn create_channel(
     .bind(quota_type)
     .bind(quota_limit)
     .bind(quota_cycle)
+    .bind(period_start)
+    .bind(period_end)
     .bind(app_profile_id)
+    .bind(proxy_url)
     .execute(pool)
     .await?;
     Ok(result.last_insert_rowid())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn update_channel(
     pool: &SqlitePool,
     id: i64,
@@ -364,12 +375,13 @@ pub async fn update_channel(
     quota_limit: Option<i64>,
     quota_cycle: Option<&str>,
     app_profile_id: Option<i64>,
+    proxy_url: Option<&str>,
     status: &str,
-    enc_key: &[u8; 32],
+    ring: &KeyRing,
 ) -> Result<(), sqlx::Error> {
-    let encrypted_keys = maybe_encrypt_api_keys(api_keys, enc_key);
+    let encrypted_keys = maybe_encrypt_api_keys(api_keys, ring);
     sqlx::query(
-        "UPDATE channels SET name=?, type=?, base_url=?, api_keys=?, custom_headers=?, weight=?, timeout=?, retry_count=?, quota_type=?, quota_limit=?, quota_cycle=?, app_profile_id=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+        "UPDATE channels SET name=?, type=?, base_url=?, api_keys=?, custom_headers=?, weight=?, timeout=?, retry_count=?, quota_type=?, quota_limit=?, quota_cycle=?, app_profile_id=?, proxy_url=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
     )
     .bind(name)
     .bind(channel_type)
@@ -383,6 +395,7 @@ pub async fn update_channel(
     .bind(quota_limit)
     .bind(quota_cycle)
     .bind(app_profile_id)
+    .bind(proxy_url)
     .bind(status)
     .bind(id)
     .execute(pool)
@@ -398,56 +411,13 @@ pub async fn delete_channel(pool: &SqlitePool, id: i64) -> Result<(), sqlx::Erro
     Ok(())
 }
 
-/// Get a channel's API key by round-robin based on current quota_used.
-pub fn get_channel_api_key(channel: &Channel) -> Option<String> {
-    let keys: Vec<String> = serde_json::from_str(&channel.api_keys).ok()?;
-    if keys.is_empty() {
-        return None;
-    }
-    let idx = (channel.quota_used as usize) % keys.len();
-    Some(keys[idx].clone())
-}
-
 // === Model CRUD ===
-
-pub async fn get_model_by_proxy_name(pool: &SqlitePool, proxy_name: &str) -> Result<Option<Model>, sqlx::Error> {
-    sqlx::query_as::<_, Model>(
-        "SELECT * FROM models WHERE proxy_name = ? AND enabled = 1",
-    )
-    .bind(proxy_name)
-    .fetch_optional(pool)
-    .await
-}
 
 pub async fn get_model_by_id(pool: &SqlitePool, id: i64) -> Result<Option<Model>, sqlx::Error> {
     sqlx::query_as::<_, Model>("SELECT * FROM models WHERE id = ?")
         .bind(id)
         .fetch_optional(pool)
         .await
-}
-
-pub async fn get_models_by_channel(pool: &SqlitePool, channel_id: i64) -> Result<Vec<Model>, sqlx::Error> {
-    sqlx::query_as::<_, Model>(
-        "SELECT * FROM models WHERE channel_id = ? ORDER BY created_at",
-    )
-    .bind(channel_id)
-    .fetch_all(pool)
-    .await
-}
-
-pub async fn get_model_list(
-    pool: &SqlitePool,
-    page: u32,
-    page_size: u32,
-) -> Result<Vec<Model>, sqlx::Error> {
-    let offset = (page - 1) * page_size;
-    sqlx::query_as::<_, Model>(
-        "SELECT * FROM models ORDER BY created_at DESC LIMIT ? OFFSET ?",
-    )
-    .bind(page_size as i64)
-    .bind(offset as i64)
-    .fetch_all(pool)
-    .await
 }
 
 pub async fn list_models(
@@ -511,28 +481,47 @@ pub async fn delete_model(pool: &SqlitePool, id: i64) -> Result<(), sqlx::Error>
     Ok(())
 }
 
-/// Find active channels that have a model matching the given proxy name.
-pub async fn find_channels_for_model(
+/// A routable (channel, upstream model name) pair for a proxy model name.
+#[derive(Debug, Clone)]
+pub struct ModelRoute {
+    pub channel: Channel,
+    /// Name the upstream provider expects — the request body is rewritten to this.
+    pub source_name: String,
+}
+
+/// Find active channels that serve the given proxy model name.
+///
+/// Returns one entry per matching `models` row so that each channel can rewrite the
+/// request to its own upstream model name.
+pub async fn find_routes_for_model(
     pool: &SqlitePool,
     proxy_name: &str,
-) -> Result<Vec<Channel>, sqlx::Error> {
-    sqlx::query_as::<_, Channel>(
-        "SELECT c.* FROM channels c
-         INNER JOIN models m ON m.channel_id = c.id
+) -> Result<Vec<ModelRoute>, sqlx::Error> {
+    let rows: Vec<(i64, String, i32)> = sqlx::query_as(
+        "SELECT c.id, m.source_name, c.weight
+         FROM models m
+         INNER JOIN channels c ON c.id = m.channel_id
          WHERE m.proxy_name = ? AND m.enabled = 1 AND c.status = 'active'
-         ORDER BY c.weight DESC",
+         ORDER BY c.weight DESC, c.id ASC",
     )
     .bind(proxy_name)
     .fetch_all(pool)
-    .await
-}
+    .await?;
 
-/// Alias for find_channels_for_model -- get channels serving a given model name.
-pub async fn get_channel_by_model(
-    pool: &SqlitePool,
-    model_name: &str,
-) -> Result<Vec<Channel>, sqlx::Error> {
-    find_channels_for_model(pool, model_name).await
+    if rows.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut routes = Vec::with_capacity(rows.len());
+    for (channel_id, source_name, _) in rows {
+        if let Some(channel) = get_channel_by_id(pool, channel_id).await? {
+            routes.push(ModelRoute {
+                channel,
+                source_name,
+            });
+        }
+    }
+    Ok(routes)
 }
 
 // === Quota CRUD ===
@@ -551,21 +540,6 @@ pub async fn get_quota_by_id(pool: &SqlitePool, id: i64) -> Result<Option<Quota>
         .bind(id)
         .fetch_optional(pool)
         .await
-}
-
-pub async fn get_quota_list(
-    pool: &SqlitePool,
-    page: u32,
-    page_size: u32,
-) -> Result<Vec<Quota>, sqlx::Error> {
-    let offset = (page - 1) * page_size;
-    sqlx::query_as::<_, Quota>(
-        "SELECT * FROM quotas ORDER BY created_at DESC LIMIT ? OFFSET ?",
-    )
-    .bind(page_size as i64)
-    .bind(offset as i64)
-    .fetch_all(pool)
-    .await
 }
 
 pub async fn list_quotas(
@@ -595,6 +569,7 @@ pub async fn list_quotas(
     }
 }
 
+/// Insert a quota row with an initialised period (so that cyclic quotas reset).
 pub async fn create_quota(
     pool: &SqlitePool,
     user_id: i64,
@@ -603,17 +578,48 @@ pub async fn create_quota(
     cycle: &str,
     channel_id: Option<i64>,
 ) -> Result<i64, sqlx::Error> {
+    let (period_start, period_end) = crate::service::quota::compute_period(Some(cycle));
     let result = sqlx::query(
-        "INSERT INTO quotas (user_id, quota_type, total_limit, cycle, channel_id, enabled) VALUES (?, ?, ?, ?, ?, true)",
+        "INSERT INTO quotas (user_id, quota_type, total_limit, cycle, period_start, period_end, channel_id, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, true)",
     )
     .bind(user_id)
     .bind(quota_type)
     .bind(total_limit)
     .bind(cycle)
+    .bind(period_start)
+    .bind(period_end)
     .bind(channel_id)
     .execute(pool)
     .await?;
     Ok(result.last_insert_rowid())
+}
+
+/// Returns true when a quota row already exists for the user/channel combination.
+pub async fn quota_exists(
+    pool: &SqlitePool,
+    user_id: i64,
+    channel_id: Option<i64>,
+) -> Result<bool, sqlx::Error> {
+    let count: i64 = match channel_id {
+        Some(cid) => {
+            sqlx::query_scalar(
+                "SELECT COUNT(*) FROM quotas WHERE user_id = ? AND channel_id = ?",
+            )
+            .bind(user_id)
+            .bind(cid)
+            .fetch_one(pool)
+            .await?
+        }
+        None => {
+            sqlx::query_scalar(
+                "SELECT COUNT(*) FROM quotas WHERE user_id = ? AND channel_id IS NULL",
+            )
+            .bind(user_id)
+            .fetch_one(pool)
+            .await?
+        }
+    };
+    Ok(count > 0)
 }
 
 pub async fn update_quota(
@@ -640,25 +646,41 @@ pub async fn delete_quota(pool: &SqlitePool, id: i64) -> Result<(), sqlx::Error>
 }
 
 pub async fn increment_quota_used(pool: &SqlitePool, quota_id: i64, amount: i64) -> Result<bool, sqlx::Error> {
-    let result = sqlx::query("UPDATE quotas SET used = used + ? WHERE id = ? AND used + ? <= total_limit")
+    let result = sqlx::query("UPDATE quotas SET used = used + ? WHERE id = ?")
         .bind(amount)
         .bind(quota_id)
-        .bind(amount)
         .execute(pool)
         .await?;
     Ok(result.rows_affected() > 0)
 }
 
+/// Reset `used` and advance the period when the current period has elapsed.
+///
+/// Also initialises a missing period for non-permanent cycles, which repairs quota
+/// rows created by builds that did not persist `period_end`.
 pub async fn reset_quota_if_cycle_expired(pool: &SqlitePool, quota_id: i64) -> Result<(), sqlx::Error> {
-    // Reset used to 0 if the current cycle has passed
     sqlx::query(
         "UPDATE quotas SET used = 0, period_start = CURRENT_TIMESTAMP, period_end = CASE cycle
             WHEN 'hourly' THEN datetime('now', '+1 hour')
             WHEN 'daily' THEN datetime('now', '+1 day')
             WHEN 'weekly' THEN datetime('now', '+7 days')
-            WHEN 'monthly' THEN datetime('now', '+1 month')
+            WHEN 'monthly' THEN datetime('now', '+30 days')
             ELSE period_end
         END WHERE id = ? AND cycle != 'permanent' AND period_end IS NOT NULL AND period_end < CURRENT_TIMESTAMP",
+    )
+    .bind(quota_id)
+    .execute(pool)
+    .await?;
+
+    // Repair rows without a period so future resets actually fire.
+    sqlx::query(
+        "UPDATE quotas SET period_start = CURRENT_TIMESTAMP, period_end = CASE cycle
+            WHEN 'hourly' THEN datetime('now', '+1 hour')
+            WHEN 'daily' THEN datetime('now', '+1 day')
+            WHEN 'weekly' THEN datetime('now', '+7 days')
+            WHEN 'monthly' THEN datetime('now', '+30 days')
+            ELSE NULL
+        END WHERE id = ? AND cycle != 'permanent' AND period_end IS NULL",
     )
     .bind(quota_id)
     .execute(pool)
@@ -676,7 +698,7 @@ pub async fn get_user_quota_for_channel(
     user_id: i64,
     channel_id: i64,
 ) -> Result<Option<Quota>, sqlx::Error> {
-    // Try channel-level quota first
+    // Try channel-level quota first (higher priority)
     let channel_quota: Option<Quota> = sqlx::query_as(
         "SELECT * FROM quotas WHERE user_id = ? AND channel_id = ? AND enabled = 1 ORDER BY created_at DESC LIMIT 1",
     )
@@ -698,48 +720,65 @@ pub async fn get_user_quota_for_channel(
     .await
 }
 
-pub async fn check_channel_quota(
+/// Read the quota configuration of a channel.
+pub async fn channel_quota_state(
     pool: &SqlitePool,
     channel_id: i64,
-) -> Result<bool, sqlx::Error> {
-    let row: (Option<i64>, Option<i64>) = sqlx::query_as(
-        "SELECT quota_limit, quota_used FROM channels WHERE id = ?",
+) -> Result<Option<(Option<String>, Option<i64>, i64)>, sqlx::Error> {
+    sqlx::query_as::<_, (Option<String>, Option<i64>, i64)>(
+        "SELECT quota_type, quota_limit, quota_used FROM channels WHERE id = ?",
     )
     .bind(channel_id)
-    .fetch_one(pool)
-    .await?;
-
-    match (row.0, row.1) {
-        (Some(limit), Some(used)) => Ok(used < limit),
-        _ => Ok(true), // no limit set => not exceeded
-    }
+    .fetch_optional(pool)
+    .await
 }
 
+/// Add usage to a channel's quota.
+///
+/// The amount is added unconditionally: blocking is decided by the pre-flight check,
+/// and clamping here would let an oversized request through for free.
 pub async fn increment_channel_quota(
     pool: &SqlitePool,
     channel_id: i64,
     amount: i64,
 ) -> Result<bool, sqlx::Error> {
     let result = sqlx::query(
-        "UPDATE channels SET quota_used = quota_used + ? WHERE id = ? AND quota_limit IS NOT NULL AND quota_used + ? <= quota_limit",
+        "UPDATE channels SET quota_used = quota_used + ? WHERE id = ? AND quota_limit IS NOT NULL",
     )
     .bind(amount)
     .bind(channel_id)
-    .bind(amount)
     .execute(pool)
     .await?;
     Ok(result.rows_affected() > 0)
 }
 
-/// Check if an IP is in the global blacklist.
-pub async fn is_ip_blacklisted(pool: &SqlitePool, ip: &str) -> Result<bool, sqlx::Error> {
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM ip_blacklist WHERE ip_address = ?",
+/// Initialise the quota period of a channel when the cycle changed or is missing.
+pub async fn set_channel_quota_period(
+    pool: &SqlitePool,
+    channel_id: i64,
+    quota_cycle: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    let (period_start, period_end) = crate::service::quota::compute_period(quota_cycle);
+    sqlx::query(
+        "UPDATE channels SET quota_period_start = ?, quota_period_end = ? WHERE id = ?",
     )
-    .bind(ip)
-    .fetch_one(pool)
+    .bind(period_start)
+    .bind(period_end)
+    .bind(channel_id)
+    .execute(pool)
     .await?;
-    Ok(count > 0)
+    Ok(())
+}
+
+/// Check if an IP is in the global blacklist.
+///
+/// Rules may be plain addresses or CIDR blocks (`192.168.1.0/24`, `2001:db8::/32`).
+pub async fn is_ip_blacklisted(pool: &SqlitePool, ip: &str) -> Result<bool, sqlx::Error> {
+    let rules: Vec<String> =
+        sqlx::query_scalar("SELECT ip_address FROM ip_blacklist")
+            .fetch_all(pool)
+            .await?;
+    Ok(crate::utils::ip::matches_any(ip, &rules))
 }
 
 /// Check if a user has an IP whitelist and if the given IP is in it.
@@ -751,26 +790,18 @@ pub async fn check_user_ip_whitelist(
     user_id: i64,
     ip: &str,
 ) -> Result<Option<bool>, sqlx::Error> {
-    let has_whitelist: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM ip_whitelist WHERE user_id = ?",
+    let rules: Vec<String> = sqlx::query_scalar(
+        "SELECT ip_address FROM ip_whitelist WHERE user_id = ?",
     )
     .bind(user_id)
-    .fetch_one(pool)
+    .fetch_all(pool)
     .await?;
 
-    if has_whitelist == 0 {
+    if rules.is_empty() {
         return Ok(None);
     }
 
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM ip_whitelist WHERE user_id = ? AND ip_address = ?",
-    )
-    .bind(user_id)
-    .bind(ip)
-    .fetch_one(pool)
-    .await?;
-
-    Ok(Some(count > 0))
+    Ok(Some(crate::utils::ip::matches_any(ip, &rules)))
 }
 
 // === AppProfile CRUD ===
@@ -781,30 +812,6 @@ pub async fn get_app_profile_by_id(pool: &SqlitePool, id: i64) -> Result<Option<
     )
     .bind(id)
     .fetch_optional(pool)
-    .await
-}
-
-pub async fn get_app_profile_by_identifier(pool: &SqlitePool, identifier: &str) -> Result<Option<AppProfile>, sqlx::Error> {
-    sqlx::query_as::<_, AppProfile>(
-        "SELECT * FROM app_profiles WHERE identifier = ? AND enabled = 1",
-    )
-    .bind(identifier)
-    .fetch_optional(pool)
-    .await
-}
-
-pub async fn get_app_profile_list(
-    pool: &SqlitePool,
-    page: u32,
-    page_size: u32,
-) -> Result<Vec<AppProfile>, sqlx::Error> {
-    let offset = (page - 1) * page_size;
-    sqlx::query_as::<_, AppProfile>(
-        "SELECT * FROM app_profiles ORDER BY is_system DESC, created_at DESC LIMIT ? OFFSET ?",
-    )
-    .bind(page_size as i64)
-    .bind(offset as i64)
-    .fetch_all(pool)
     .await
 }
 
@@ -920,25 +927,23 @@ pub async fn get_rate_limit_by_id(
         .await
 }
 
-pub async fn get_rate_limit_list(
+pub async fn list_ratelimits(
     pool: &SqlitePool,
-    page: u32,
-    page_size: u32,
-) -> Result<Vec<RateLimitConfig>, sqlx::Error> {
+    page: i64,
+    page_size: i64,
+) -> Result<(Vec<RateLimitConfig>, i64), sqlx::Error> {
+    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rate_limit_configs")
+        .fetch_one(pool)
+        .await?;
     let offset = (page - 1) * page_size;
-    sqlx::query_as::<_, RateLimitConfig>(
-        "SELECT * FROM rate_limit_configs ORDER BY created_at DESC LIMIT ? OFFSET ?",
+    let configs = sqlx::query_as::<_, RateLimitConfig>(
+        "SELECT * FROM rate_limit_configs ORDER BY target_type, created_at LIMIT ? OFFSET ?"
     )
-    .bind(page_size as i64)
-    .bind(offset as i64)
+    .bind(page_size)
+    .bind(offset)
     .fetch_all(pool)
-    .await
-}
-
-pub async fn list_ratelimits(pool: &SqlitePool) -> Result<Vec<RateLimitConfig>, sqlx::Error> {
-    sqlx::query_as::<_, RateLimitConfig>("SELECT * FROM rate_limit_configs ORDER BY target_type, created_at")
-        .fetch_all(pool)
-        .await
+    .await?;
+    Ok((configs, total))
 }
 
 pub async fn create_ratelimit(
@@ -989,36 +994,46 @@ pub async fn delete_ratelimit(pool: &SqlitePool, id: i64) -> Result<(), sqlx::Er
 
 // === RequestLog CRUD ===
 
-pub async fn insert_request_log(
+/// Fields required to record one proxied request.
+#[derive(Debug, Clone)]
+pub struct NewRequestLog<'a> {
+    pub user_api_key: &'a str,
+    pub user_id: Option<i64>,
+    pub key_id: Option<i64>,
+    pub channel_id: Option<i64>,
+    pub model: &'a str,
+    pub endpoint: &'a str,
+    pub status_code: i32,
+    pub prompt_tokens: i32,
+    pub completion_tokens: i32,
+    pub total_tokens: i32,
+    pub elapsed_ms: i32,
+    pub request_body: Option<&'a str>,
+    pub response_body: Option<&'a str>,
+    pub error_message: Option<&'a str>,
+}
+
+pub async fn create_request_log(
     pool: &SqlitePool,
-    user_api_key: &str,
-    channel_id: Option<i64>,
-    model: &str,
-    endpoint: &str,
-    status_code: i32,
-    prompt_tokens: i32,
-    completion_tokens: i32,
-    total_tokens: i32,
-    elapsed_ms: i32,
-    request_body: Option<&str>,
-    response_body: Option<&str>,
-    error_message: Option<&str>,
+    log: &NewRequestLog<'_>,
 ) -> Result<i64, sqlx::Error> {
     let result = sqlx::query(
-        "INSERT INTO request_logs (user_api_key, channel_id, model, endpoint, status_code, prompt_tokens, completion_tokens, total_tokens, elapsed_ms, request_body, response_body, error_message) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO request_logs (user_api_key, user_id, key_id, channel_id, model, endpoint, status_code, prompt_tokens, completion_tokens, total_tokens, elapsed_ms, request_body, response_body, error_message) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
-    .bind(user_api_key)
-    .bind(channel_id)
-    .bind(model)
-    .bind(endpoint)
-    .bind(status_code)
-    .bind(prompt_tokens)
-    .bind(completion_tokens)
-    .bind(total_tokens)
-    .bind(elapsed_ms)
-    .bind(request_body)
-    .bind(response_body)
-    .bind(error_message)
+    .bind(log.user_api_key)
+    .bind(log.user_id)
+    .bind(log.key_id)
+    .bind(log.channel_id)
+    .bind(log.model)
+    .bind(log.endpoint)
+    .bind(log.status_code)
+    .bind(log.prompt_tokens)
+    .bind(log.completion_tokens)
+    .bind(log.total_tokens)
+    .bind(log.elapsed_ms)
+    .bind(log.request_body)
+    .bind(log.response_body)
+    .bind(log.error_message)
     .execute(pool)
     .await?;
     Ok(result.last_insert_rowid())
@@ -1042,53 +1057,72 @@ pub async fn delete_request_log(pool: &SqlitePool, id: i64) -> Result<(), sqlx::
     Ok(())
 }
 
-pub async fn get_request_log_list(
-    pool: &SqlitePool,
-    page: u32,
-    page_size: u32,
-) -> Result<Vec<RequestLog>, sqlx::Error> {
-    let offset = (page - 1) * page_size;
-    sqlx::query_as::<_, RequestLog>(
-        "SELECT * FROM request_logs ORDER BY created_at DESC LIMIT ? OFFSET ?",
-    )
-    .bind(page_size as i64)
-    .bind(offset as i64)
-    .fetch_all(pool)
-    .await
+/// Filters accepted by [`list_logs`] and [`count_logs`].
+#[derive(Debug, Clone, Default)]
+pub struct LogFilters<'a> {
+    /// Restrict to requests made by this user (new logs use `user_id`, legacy rows
+    /// are matched through the user's API keys).
+    pub user_id: Option<i64>,
+    /// Substring match on the API key (admin search).
+    pub api_key_pattern: Option<&'a str>,
+    pub model: Option<&'a str>,
+    pub status_code_prefix: Option<&'a str>,
+    pub start_time: Option<&'a str>,
+    pub end_time: Option<&'a str>,
 }
+
+/// SQL fragment shared by the count and page queries.
+const LOG_FILTER_SQL: &str = "FROM request_logs
+     WHERE (?1 IS NULL OR user_id = ?1 OR user_api_key IN (
+              SELECT k.key_value FROM user_keys k WHERE k.user_id = ?1
+              UNION ALL SELECT u.api_key FROM users u WHERE u.id = ?1))
+       AND (?2 IS NULL OR user_api_key LIKE ?2)
+       AND (?3 IS NULL OR model = ?3)
+       AND (?4 IS NULL OR CAST(status_code AS TEXT) LIKE ?4)
+       AND (?5 IS NULL OR created_at >= ?5)
+       AND (?6 IS NULL OR created_at <= ?6)";
 
 pub async fn list_logs(
     pool: &SqlitePool,
     page: i64,
     page_size: i64,
-    user_id: Option<&str>,
-    model: Option<&str>,
-    status_code_prefix: Option<&str>,
+    filters: &LogFilters<'_>,
 ) -> Result<Vec<RequestLog>, sqlx::Error> {
-    let offset = (page - 1) * page_size;
+    let offset = (page.max(1) - 1) * page_size.max(1);
+    let api_key_pattern = filters.api_key_pattern.map(|u| format!("%{u}%"));
+    let status_pattern = filters.status_code_prefix.map(|s| format!("{s}%"));
 
-    // Use parameterized queries to prevent SQL injection
-    let user_pattern = user_id.map(|u| format!("%{}%", u));
-    let model_exact = model.map(|m| m.to_string());
-    let status_pattern = status_code_prefix.map(|s| format!("{}%", s));
-
-    let query = sqlx::query_as::<_, RequestLog>(
-        "SELECT * FROM request_logs WHERE 1=1
-         AND (? IS NULL OR user_api_key LIKE ?)
-         AND (? IS NULL OR model = ?)
-         AND (? IS NULL OR status_code LIKE ?)
-         ORDER BY created_at DESC LIMIT ? OFFSET ?",
-    )
-    .bind(user_pattern.as_deref())
-    .bind(user_pattern.as_deref())
-    .bind(model_exact.as_deref())
-    .bind(model_exact.as_deref())
+    sqlx::query_as::<_, RequestLog>(&format!(
+        "SELECT * {LOG_FILTER_SQL} ORDER BY created_at DESC, id DESC LIMIT ?7 OFFSET ?8"
+    ))
+    .bind(filters.user_id)
+    .bind(api_key_pattern.as_deref())
+    .bind(filters.model)
     .bind(status_pattern.as_deref())
-    .bind(status_pattern.as_deref())
-    .bind(page_size)
-    .bind(offset);
+    .bind(filters.start_time)
+    .bind(filters.end_time)
+    .bind(page_size.max(1))
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+}
 
-    query.fetch_all(pool).await
+pub async fn count_logs(
+    pool: &SqlitePool,
+    filters: &LogFilters<'_>,
+) -> Result<i64, sqlx::Error> {
+    let api_key_pattern = filters.api_key_pattern.map(|u| format!("%{u}%"));
+    let status_pattern = filters.status_code_prefix.map(|s| format!("{s}%"));
+
+    sqlx::query_scalar::<_, i64>(&format!("SELECT COUNT(*) {LOG_FILTER_SQL}"))
+        .bind(filters.user_id)
+        .bind(api_key_pattern.as_deref())
+        .bind(filters.model)
+        .bind(status_pattern.as_deref())
+        .bind(filters.start_time)
+        .bind(filters.end_time)
+        .fetch_one(pool)
+        .await
 }
 
 pub async fn cleanup_old_logs(pool: &SqlitePool, retention_days: i32) -> Result<u64, sqlx::Error> {
@@ -1287,10 +1321,56 @@ pub async fn list_all_traffic_plans(
     .fetch_all(pool)
     .await?;
 
-    let mut result = Vec::new();
-    for plan in &plans {
-        result.push(get_traffic_plan_detail(pool, plan).await?);
+    if plans.is_empty() {
+        return Ok(Vec::new());
     }
+
+    let plan_ids: Vec<i64> = plans.iter().map(|p| p.id).collect();
+    let placeholders = plan_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let sql = format!(
+        "SELECT s.id, s.start_hour, s.end_hour, s.app_profile_id, s.weight, \
+                s.plan_id, p.name, p.identifier \
+         FROM traffic_plan_slots s \
+         JOIN app_profiles p ON p.id = s.app_profile_id \
+         WHERE s.plan_id IN ({}) \
+         ORDER BY s.plan_id, s.start_hour, s.id",
+        placeholders
+    );
+
+    let mut query = sqlx::query_as::<_, (i64, i32, i32, i64, i32, i64, String, String)>(&sql);
+    for id in &plan_ids {
+        query = query.bind(id);
+    }
+    type SlotRow = (i64, i32, i32, i64, i32, i64, String, String);
+    let all_slots: Vec<SlotRow> = query.fetch_all(pool).await?;
+
+    use std::collections::HashMap;
+    let mut slots_by_plan: HashMap<i64, Vec<TrafficPlanSlotWithProfile>> = HashMap::new();
+    for (id, sh, eh, ap_id, w, plan_id, name, ident) in all_slots {
+        slots_by_plan.entry(plan_id).or_default().push(TrafficPlanSlotWithProfile {
+            id,
+            start_hour: sh,
+            end_hour: eh,
+            app_profile_id: ap_id,
+            app_profile_name: name,
+            app_profile_identifier: ident,
+            weight: w,
+        });
+    }
+
+    let result = plans
+        .into_iter()
+        .map(|plan| {
+            let slots = slots_by_plan.remove(&plan.id).unwrap_or_default();
+            TrafficPlanDetail {
+                id: plan.id,
+                channel_id: plan.channel_id,
+                slots,
+                created_at: plan.created_at,
+            }
+        })
+        .collect();
+
     Ok(result)
 }
 
@@ -1419,6 +1499,127 @@ pub async fn get_user_key_by_value(pool: &SqlitePool, key_value: &str) -> Result
     .await
 }
 
+/// Result of resolving an incoming API key to its owner.
+#[derive(Debug, Clone)]
+pub struct AuthIdentity {
+    pub user_id: i64,
+    pub role: String,
+    pub user_status: String,
+    /// `Some(id)` when the key comes from the `user_keys` table.
+    pub key_id: Option<i64>,
+    pub key_status: Option<String>,
+    /// Model allow-list attached to the key (falls back to the user's list).
+    pub allowed_models: Option<Vec<String>>,
+}
+
+/// Resolve an API key to a user, honouring key revocation.
+///
+/// Both `users.api_key` (primary key) and `user_keys.key_value` are accepted. When a
+/// `user_keys` row exists for the primary key, its status decides whether the key is
+/// still usable — that is what makes "disable key" in the UI actually revoke access.
+pub async fn resolve_api_key(
+    pool: &SqlitePool,
+    key_value: &str,
+) -> Result<Option<AuthIdentity>, sqlx::Error> {
+    // 1) Dedicated key rows take precedence.
+    // (key id, user id, role, key models, key status, user status, user models)
+    type KeyAuthRow = (i64, i64, String, Option<String>, String, String, Option<String>);
+    let key_row: Option<KeyAuthRow> =
+        sqlx::query_as(
+            "SELECT k.id, u.id, u.role, k.enabled_models, k.status, u.status, u.enabled_models
+             FROM user_keys k
+             JOIN users u ON u.id = k.user_id
+             WHERE k.key_value = ?",
+        )
+        .bind(key_value)
+        .fetch_optional(pool)
+        .await?;
+
+    if let Some((key_id, user_id, role, key_models, key_status, user_status, user_models)) = key_row
+    {
+        return Ok(Some(AuthIdentity {
+            user_id,
+            role,
+            user_status,
+            key_id: Some(key_id),
+            key_status: Some(key_status),
+            // A key without its own list inherits the user's list.
+            allowed_models: parse_model_list(key_models).or_else(|| parse_model_list(user_models)),
+        }));
+    }
+
+    // 2) Primary key on the users table.
+    let user_row: Option<(i64, String, String, Option<String>)> = sqlx::query_as(
+        "SELECT id, role, status, enabled_models FROM users WHERE api_key = ?",
+    )
+    .bind(key_value)
+    .fetch_optional(pool)
+    .await?;
+
+    let Some((user_id, role, user_status, user_models)) = user_row else {
+        return Ok(None);
+    };
+
+    // A `user_keys` row may mirror the primary key; if it was disabled, revoke it.
+    let mirrored: Option<(i64, Option<String>, String)> = sqlx::query_as(
+        "SELECT id, enabled_models, status FROM user_keys WHERE key_value = ? AND user_id = ?",
+    )
+    .bind(key_value)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+
+    let (key_id, key_status, allowed_models) = match mirrored {
+        Some((id, models, status)) => {
+            let models = parse_model_list(models).or_else(|| parse_model_list(user_models));
+            (Some(id), Some(status), models)
+        }
+        None => (None, None, parse_model_list(user_models)),
+    };
+
+    Ok(Some(AuthIdentity {
+        user_id,
+        role,
+        user_status,
+        key_id,
+        key_status,
+        allowed_models,
+    }))
+}
+
+/// Parse a JSON array of model names, tolerating `NULL`/invalid payloads.
+fn parse_model_list(raw: Option<String>) -> Option<Vec<String>> {
+    let raw = raw?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    match serde_json::from_str::<Vec<String>>(trimmed) {
+        Ok(list) if !list.is_empty() => Some(list),
+        Ok(_) => None,
+        Err(e) => {
+            tracing::warn!(error = %e, raw = %trimmed, "Ignoring malformed enabled_models JSON");
+            None
+        }
+    }
+}
+
+/// All API key values that belong to a user (primary key + dedicated keys).
+pub async fn list_user_key_values(
+    pool: &SqlitePool,
+    user_id: i64,
+) -> Result<Vec<String>, sqlx::Error> {
+    sqlx::query_scalar(
+        "SELECT k.key_value FROM user_keys k WHERE k.user_id = ?
+         UNION
+         SELECT u.api_key FROM users u WHERE u.id = ?",
+    )
+    .bind(user_id)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+}
+
 pub async fn list_user_keys_by_user(pool: &SqlitePool, user_id: i64) -> Result<Vec<UserKey>, sqlx::Error> {
     sqlx::query_as::<_, UserKey>(
         "SELECT * FROM user_keys WHERE user_id = ? ORDER BY created_at DESC"
@@ -1436,25 +1637,41 @@ pub async fn list_all_user_keys(pool: &SqlitePool) -> Result<Vec<UserKeyWithUser
     .await
 }
 
+/// Load a single key row owned by `user_id`.
+pub async fn get_user_key_by_id(
+    pool: &SqlitePool,
+    key_id: i64,
+    user_id: i64,
+) -> Result<Option<UserKey>, sqlx::Error> {
+    sqlx::query_as::<_, UserKey>("SELECT * FROM user_keys WHERE id = ? AND user_id = ?")
+        .bind(key_id)
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await
+}
+
+/// Update a key row. Empty `name`/`enabled_models` clears the column.
 pub async fn update_user_key(
     pool: &SqlitePool,
     key_id: i64,
     user_id: i64,
     name: Option<&str>,
     enabled_models: Option<&str>,
-    status: Option<&str>,
-) -> Result<(), sqlx::Error> {
-    let q = if let Some(s) = status {
-        sqlx::query(
-            "UPDATE user_keys SET name = COALESCE(?, name), enabled_models = COALESCE(?, enabled_models), status = COALESCE(?, status) WHERE id = ? AND user_id = ?"
-        ).bind(name).bind(enabled_models).bind(s).bind(key_id).bind(user_id)
-    } else {
-        sqlx::query(
-            "UPDATE user_keys SET name = COALESCE(?, name), enabled_models = COALESCE(?, enabled_models) WHERE id = ? AND user_id = ?"
-        ).bind(name).bind(enabled_models).bind(key_id).bind(user_id)
-    };
-    q.execute(pool).await?;
-    Ok(())
+    status: &str,
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        "UPDATE user_keys
+         SET name = NULLIF(?, ''), enabled_models = NULLIF(?, ''), status = ?
+         WHERE id = ? AND user_id = ?",
+    )
+    .bind(name)
+    .bind(enabled_models)
+    .bind(status)
+    .bind(key_id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() > 0)
 }
 
 pub async fn delete_user_key(pool: &SqlitePool, key_id: i64, user_id: i64) -> Result<(), sqlx::Error> {
@@ -1463,6 +1680,63 @@ pub async fn delete_user_key(pool: &SqlitePool, key_id: i64, user_id: i64) -> Re
         .bind(user_id)
         .execute(pool)
         .await?;
+    Ok(())
+}
+
+/// Returns the key value of a `user_keys` row owned by `user_id`.
+pub async fn get_user_key_value(
+    pool: &SqlitePool,
+    key_id: i64,
+    user_id: i64,
+) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar("SELECT key_value FROM user_keys WHERE id = ? AND user_id = ?")
+        .bind(key_id)
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await
+}
+
+/// True when the given key row mirrors the user's primary key (`users.api_key`).
+///
+/// Deleting such a row would silently leave the primary key valid, so the API refuses.
+pub async fn key_is_primary(
+    pool: &SqlitePool,
+    key_value: &str,
+    user_id: i64,
+) -> Result<bool, sqlx::Error> {
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM users WHERE id = ? AND api_key = ?",
+    )
+    .bind(user_id)
+    .bind(key_value)
+    .fetch_one(pool)
+    .await?;
+    Ok(count > 0)
+}
+
+/// Rotate a user's primary key and keep the mirrored `user_keys` row in sync.
+pub async fn rotate_user_api_key(
+    pool: &SqlitePool,
+    user_id: i64,
+    old_key: &str,
+    new_key: &str,
+) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    sqlx::query("UPDATE users SET api_key = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+        .bind(new_key)
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query("UPDATE user_keys SET key_value = ? WHERE user_id = ? AND key_value = ?")
+        .bind(new_key)
+        .bind(user_id)
+        .bind(old_key)
+        .execute(&mut *tx)
+        .await?;
+
+    tx.commit().await?;
     Ok(())
 }
 

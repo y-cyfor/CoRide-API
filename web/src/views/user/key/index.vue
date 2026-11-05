@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, h, onMounted } from 'vue';
-import { NButton, NTag, NSpace, NModal, NForm, NFormItem, NInput, NSelect, useDialog, useMessage, NCard, NDataTable, NInputNumber } from 'naive-ui';
+import { NButton, NTag, NSpace, NModal, NForm, NFormItem, NInput, NSelect, useDialog, useMessage, NCard, NDataTable } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
 import { fetchUserKeyList, fetchCreateUserKey, fetchUpdateUserKey, fetchDeleteUserKey, fetchModelList } from '@/service/api';
 

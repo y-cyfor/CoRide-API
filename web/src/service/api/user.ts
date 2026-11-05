@@ -2,7 +2,7 @@ import { request } from '../request';
 
 /** Get user list with pagination */
 export function fetchUserList(page = 1, pageSize = 20) {
-  return request<Api.User.User[]>({
+  return request<Api.Common.PageResult<Api.User.User>>({
     url: '/admin/users',
     method: 'get',
     params: { page, page_size: pageSize }

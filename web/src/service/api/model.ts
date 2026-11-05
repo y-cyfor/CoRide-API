@@ -2,7 +2,7 @@ import { request } from '../request';
 
 /** Get model list with pagination */
 export function fetchModelList(page = 1, pageSize = 20) {
-  return request<Api.Model.Model[]>({
+  return request<Api.Common.PageResult<Api.Model.Model>>({
     url: '/admin/models',
     method: 'get',
     params: { page, page_size: pageSize }

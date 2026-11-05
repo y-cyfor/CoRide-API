@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, h, onMounted } from 'vue';
-import { NButton, NTag, NSpace, NModal, NForm, NFormItem, NInput, NInputNumber, NSelect, NCascader, NProgress, useDialog, useMessage, NPopconfirm, NCard } from 'naive-ui';
+import { NButton, NTag, NSpace, NModal, NForm, NFormItem, NInput, NSelect, NProgress, useDialog, useMessage, NPopconfirm, NCard } from 'naive-ui';
 import { fetchUserList, fetchCreateUser, fetchUpdateUser, fetchResetUserKey, fetchDeleteUser, fetchModelList } from '@/service/api';
 import { fetchUserWhitelist, fetchAddWhitelist, fetchDeleteWhitelist } from '@/service/api/ip';
 import type { DataTableColumns } from 'naive-ui';
@@ -25,7 +25,7 @@ const pagination = ref({
   itemCount: 0,
   showSizePicker: true,
   pageSizes: [10, 20, 50],
-  prefix: ({ itemCount }: { itemCount: number }) => `共 ${itemCount} 条`,
+  prefix: (info: { itemCount?: number }) => `共 ${info.itemCount ?? 0} 条`,
   onChange: (page: number) => {
     pagination.value.page = page;
     loadData();

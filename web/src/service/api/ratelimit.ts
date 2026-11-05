@@ -1,10 +1,11 @@
 import { request } from '../request';
 
 /** Get all rate limit configs */
-export function fetchRateLimitList() {
-  return request<Api.RateLimit.RateLimit[]>({
+export function fetchRateLimitList(page = 1, pageSize = 100) {
+  return request<Api.Common.PageResult<Api.RateLimit.RateLimit>>({
     url: '/admin/ratelimits',
-    method: 'get'
+    method: 'get',
+    params: { page, page_size: pageSize }
   });
 }
 

@@ -93,7 +93,7 @@ async function loadData() {
       renderTokenChart(usageRes.data.token_daily || []);
     }
     const { data: recent, error: err3 } = await fetchRecentLogs(10);
-    if (!err3 && recent) recentLogs.value = recent;
+    if (!err3 && recent) recentLogs.value = recent.items ?? [];
     const { data: warnings, error: err4 } = await fetchQuotaWarnings();
     if (!err4 && warnings) quotaWarnings.value = warnings.warnings || [];
   } else {

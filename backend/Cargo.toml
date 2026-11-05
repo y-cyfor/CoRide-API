@@ -21,10 +21,12 @@ tokio = { version = "1", features = ["full"] }
 thiserror = "2"
 chrono = { version = "0.4", features = ["serde"] }
 dashmap = "6"
-tower-http = { version = "0.6", features = ["cors", "fs", "compression-br"] }
+tower-http = { version = "0.6", features = ["cors"] }
 uuid = { version = "1", features = ["v4"] }
 dotenvy = "0.15"
 base64 = "0.22"
 aes-gcm = { version = "0.10", features = ["std"] }
 sha2 = "0.10"
-fastrand = "2"
+getrandom = "0.2"
+bytes = "1"
+tokio-stream = { version = "0.1", features = ["sync"] }

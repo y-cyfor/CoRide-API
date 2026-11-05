@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, h, onMounted } from 'vue';
-import { NCard, NSpace, NDescriptions, NDescriptionsItem, NTag, NSpin, NSelect, NInputNumber, NButton, useMessage, NSwitch, NFormItem, NForm, NAlert, NInput, NDataTable, NPopconfirm } from 'naive-ui';
+import { NCard, NSpace, NDescriptions, NDescriptionsItem, NTag, NSpin, NSelect, NInputNumber, NButton, useMessage, NFormItem, NForm, NAlert, NInput, NDataTable, NPopconfirm } from 'naive-ui';
 import { request } from '@/service/request';
 import { fetchBlacklistList, fetchAddBlacklist, fetchDeleteBlacklist } from '@/service/api/ip';
 import type { DataTableColumns } from 'naive-ui';
@@ -56,10 +56,10 @@ async function updateLogLevel() {
   const { error } = await request({
     url: '/admin/system/config/log-level',
     method: 'put',
-    data: { level: logLevel.value }
+    data: { level: logLevel.value, retention_days: retentionDays.value }
   });
   if (!error) {
-    message.success('日志级别已更新为: ' + logLevel.value);
+    message.success('日志级别已更新为: ' + logLevel.value + '，立即生效');
   } else {
     message.error('更新失败');
   }
@@ -193,7 +193,6 @@ onMounted(() => {
             <NSpace justify="end">
               <NButton type="primary" size="small" @click="updateLogLevel">更新日志级别</NButton>
             </NSpace>
-            <NAlert type="warning" size="small">修改后需重启服务才能生效</NAlert>
           </NSpace>
         </NCard>
 
@@ -236,8 +235,33 @@ onMounted(() => {
             <NSpace justify="end">
               <NButton type="primary" size="small" :loading="saving" @click="updateRateLimit">保存限流配置</NButton>
             </NSpace>
-            <NAlert type="warning" size="small">修改后需重启服务才能生效</NAlert>
+            <NAlert type="info" size="small">保存后立即生效（同时写入配置文件，重启后依然有效）</NAlert>
           </NSpace>
+        </NCard>
+
+        <!-- Health check & security -->
+        <NCard title="健康检查与加密" :bordered="false" class="card-wrapper">
+          <NDescriptions :column="3" bordered label-placement="left">
+            <NDescriptionsItem label="健康检查">
+              <NTag :type="config.health_check?.enabled ? 'success' : 'default'">
+                {{ config.health_check?.enabled ? '启用' : '禁用' }}
+              </NTag>
+            </NDescriptionsItem>
+            <NDescriptionsItem label="探测间隔">
+              {{ config.health_check?.interval_secs }}s
+            </NDescriptionsItem>
+            <NDescriptionsItem label="失败阈值">
+              {{ config.health_check?.failure_threshold }} 次
+            </NDescriptionsItem>
+            <NDescriptionsItem label="API Key 加密">
+              <NTag :type="config.security?.encryption_key_count > 0 ? 'success' : 'warning'">
+                {{ config.security?.encryption_key_count > 0 ? `已启用（${config.security.encryption_key_count} 把密钥）` : '未启用' }}
+              </NTag>
+            </NDescriptionsItem>
+            <NDescriptionsItem label="密钥来源">
+              {{ config.security?.encryption_secret_source === 'jwt_secret' ? 'JWT_SECRET（建议单独配置）' : '独立配置' }}
+            </NDescriptionsItem>
+          </NDescriptions>
         </NCard>
 
         <!-- IP Blacklist -->

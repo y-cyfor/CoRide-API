@@ -62,6 +62,13 @@ pub async fn user_auth_middleware(
     }
 
     // Inject claims into request extensions
+    request.extensions_mut().insert(crate::middleware::auth::AuthContext {
+        user_id: claims.user_id,
+        role: claims.role.clone(),
+        api_key: String::new(),
+        key_id: None,
+        allowed_models: None,
+    });
     request.extensions_mut().insert(claims.user_id);
     request.extensions_mut().insert(claims.username);
     request.extensions_mut().insert(claims.role);
