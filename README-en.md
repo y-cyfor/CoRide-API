@@ -1,3 +1,17 @@
+<div align="center">
+
+> **⚠️ Project status: no further feature updates**
+>
+> Cloud providers have changed their strategies: per-call "CodingPlan" plans no longer exist on the
+> market and everything has moved to token-based billing, so there is no need to keep developing
+> this project.
+>
+> **The final release (v1.0.0) only fixes known issues and adds no new features.**
+
+</div>
+
+---
+
 # CoRide-API
 
 > A lightweight AI API proxy service — multi-model carpooling
