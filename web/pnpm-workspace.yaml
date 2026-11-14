@@ -1,2 +1,11 @@
 packages:
   - 'packages/*'
+
+# Dependencies whose install scripts are required to build the frontend.
+# Newer pnpm versions refuse to run unlisted build scripts (ERR_PNPM_IGNORED_BUILDS),
+# which used to break the Docker image build. `simple-git-hooks` is intentionally left
+# out: it only installs git hooks and must not run inside the container.
+onlyBuiltDependencies:
+  - esbuild
+  - '@parcel/watcher'
+  - vue-demi

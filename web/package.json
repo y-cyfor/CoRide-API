@@ -1,6 +1,7 @@
 {
   "name": "coride-api",
   "version": "1.0.0",
+  "packageManager": "pnpm@10.33.0",
   "description": "CoRide-API Admin - A fresh and elegant admin template for AI API proxy management. 一个轻量化API中转代理平台。",
   "keywords": [
     "TypeScript",

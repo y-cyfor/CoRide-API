@@ -19,6 +19,8 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 COPY web/ .
+# The image has no git checkout, so hook installation is pointless (and noisy).
+ENV SKIP_INSTALL_SIMPLE_GIT_HOOKS=1
 RUN corepack enable && pnpm install --frozen-lockfile
 RUN pnpm build
 
